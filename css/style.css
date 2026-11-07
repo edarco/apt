@@ -47,3 +47,13 @@ input[type=color]{padding:0;width:34px;height:26px;border:1px solid var(--line);
 .hint{color:var(--mut);font-size:12px}
 dialog{border:1px solid var(--line);border-radius:10px;padding:14px}
 .dlgBtns{display:flex;gap:8px;margin-top:10px;justify-content:flex-end}
+/* тёмная тема */
+[data-theme=dark]{--bg:#1b1c20;--panel:#25262b;--line:#3b3c44;--ink:#e7e7ea;--mut:#a0a0aa}
+[data-theme=dark] button,
+[data-theme=dark] input[type=text],[data-theme=dark] input[type=number],
+[data-theme=dark] select,[data-theme=dark] textarea,[data-theme=dark] input[type=color]{background:var(--panel);color:var(--ink)}
+[data-theme=dark] button:hover{background:#33343b}
+[data-theme=dark] button.on{background:#e7e7ea;color:#1b1c20}
+[data-theme=dark] .row>span{color:var(--mut)}
+[data-theme=dark] #status,[data-theme=dark] #bar3d{background:rgba(37,38,43,.92);color:var(--ink)}
+[data-theme=dark] dialog{background:var(--panel);color:var(--ink)}

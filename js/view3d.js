@@ -1,9 +1,10 @@
 (function () {
   const host = FP.$('c3d'), V3 = FP.v3 = {};
   let renderer, scene, camera, root, sun, raf = 0, last = 0, needs = true, cache = new Map(), colRects = [], tour = null;
+  let edgeMat = null;
   const orbit = { yaw: 0.6, pitch: 0.75, dist: 14, tx: 0, ty: 0, tz: 0 };
   const walk = { x: 0, z: 0, yaw: 0, pitch: 0, eye: 1.6 };
-  const opt = { walls: 'full', cut: 1.0, cam: 'orbit', ceil: true, op: 0.3 };
+  const opt = { walls: 'full', cut: 1.0, cam: 'orbit', ceil: true, op: 0.3, fov: 78 };
   const keys = {}, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const isWalk = () => opt.cam === 'walk';
 
@@ -88,6 +89,7 @@
                         gl ? { transparent: true, opacity: opt.op, depthWrite: false } : undefined);
           if (gl) m.castShadow = false;
           m.rotation.y = ang; root.add(m);
+          if (!gl) m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), edgeMat));
         } else if (p.type === 'glass' && p.own) {
           const m = box(p.e - p.s, p.z1 - p.z0, .03, '#9ecbf0', w.x1 + ux * (p.s + p.e) / 2, (p.z0 + p.z1) / 2, w.y1 + uy * (p.s + p.e) / 2, { transparent: true, opacity: .35, depthWrite: false }); m.rotation.y = ang; m.castShadow = false; root.add(m);
         } else if (p.type === 'door' && p.own) {
@@ -118,7 +120,7 @@
 
   // ---------- ходьба ----------
   function collide() {
-    const r = .22;
+    const r = .15;
     for (let it = 0; it < 3; it++) colRects.forEach(q => {
       const dx = walk.x - q.cx, dz = walk.z - q.cy, lx = dx * q.ux + dz * q.uy, ly = -dx * q.uy + dz * q.ux;
       const px = clamp(lx, -q.hl, q.hl), py = clamp(ly, -q.ht, q.ht), ex = lx - px, ey = ly - py, d = Math.hypot(ex, ey);
@@ -147,6 +149,10 @@
     updateHelp();
   };
   function placeCamera() {
+
+    const wantFov = isWalk() ? opt.fov : 60;
+    if (camera.fov !== wantFov) { camera.fov = wantFov; camera.updateProjectionMatrix(); }
+
     if (isWalk()) {
       camera.position.set(walk.x, walk.eye, walk.z);
       camera.lookAt(walk.x + Math.sin(walk.yaw) * Math.cos(walk.pitch), walk.eye + Math.sin(walk.pitch), walk.z - Math.cos(walk.yaw) * Math.cos(walk.pitch));
@@ -170,9 +176,10 @@
     renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; host.appendChild(renderer.domElement);
     scene = new THREE.Scene(); scene.background = new THREE.Color('#e3e8ee');
-    camera = new THREE.PerspectiveCamera(60, 1, .05, 400);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f98, .8));
-    sun = new THREE.DirectionalLight(0xffffff, .55); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; scene.add(sun, sun.target);
+    edgeMat = new THREE.LineBasicMaterial({ color: 0x7d7568 });
+    camera = new THREE.PerspectiveCamera(60, 1, .03, 400);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f98, .55));
+    sun = new THREE.DirectionalLight(0xffffff, .85); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; scene.add(sun, sun.target);
     root = new THREE.Group(); scene.add(root);
     new ResizeObserver(resize).observe(host);
     const cvs = renderer.domElement; let pd = null; cvs.tabIndex = 0;
@@ -185,7 +192,13 @@
       else if (pd.btn === 2 || pd.shift) { const k = orbit.dist * .0018; orbit.tx -= Math.cos(orbit.yaw) * dx * k; orbit.tz += Math.sin(orbit.yaw) * dx * k; orbit.tx += Math.sin(orbit.yaw) * dy * k; orbit.tz += Math.cos(orbit.yaw) * dy * k; }
       else { orbit.yaw -= dx * .007; orbit.pitch = clamp(orbit.pitch + dy * .007, .05, 1.55); }
     });
-    cvs.addEventListener('wheel', e => { e.preventDefault(); if (isWalk()) { walk.eye = clamp(walk.eye - e.deltaY * .0005, 1, 2.2); } else orbit.dist = clamp(orbit.dist * Math.exp(e.deltaY * .001), 1.5, 120); }, { passive: false });
+    cvs.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (isWalk()) {
+        if (e.shiftKey) walk.eye = clamp(walk.eye - e.deltaY * .0005, 1, 2.2);
+        else opt.fov = clamp(opt.fov + e.deltaY * .03, 45, 105);
+      } else orbit.dist = clamp(orbit.dist * Math.exp(e.deltaY * .001), 1.5, 120);
+    }, { passive: false });
     document.addEventListener('keydown', e => { if (FP.view === '3d' && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) { keys[e.code] = true; if (isWalk() && /^(Arrow|Space)/.test(e.code)) e.preventDefault(); } });
     document.addEventListener('keyup', e => { keys[e.code] = false; });
     bindBar(); resize(); return true;
@@ -200,7 +213,7 @@
     if (v) s.value = v;
   }
   function updateHelp() {
-    FP.$('o3help').textContent = isWalk() ? 'WASD / стрелки — ходьба, Q/E — поворот, мышь — взгляд, Shift — бег, колесо — рост глаз' : 'ЛКМ — вращать, ПКМ/Shift — сдвиг, колесо — масштаб';
+    FP.$('o3help').textContent = isWalk() ? 'WASD / стрелки — ходьба, Q/E — поворот, мышь — взгляд, Shift — бег, колесо — угол обзора, Shift+колесо — рост глаз' : 'ЛКМ — вращать, ПКМ/Shift — сдвиг, колесо — масштаб';
     FP.$('o3cutv').textContent = opt.cut.toFixed(1) + ' м';
   }
   function bindBar() {

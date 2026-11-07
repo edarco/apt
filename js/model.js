@@ -4,6 +4,13 @@
   FP.uid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 
   FP.PALETTE = ['#ddc5a3','#c8a97e','#8b6b4a','#d1d8d4','#eee9df','#cfd4d8','#a8b0b5','#e8d5c4','#b5c4b1','#c9b8d4','#f2d7d5','#f6e7a8','#9fc5e8','#444a50'];
+  FP.OP_RU = { door: 'Дверь', window: 'Окно', gap: 'Проём' };
+  FP.KIND_RU = {
+    bed: 'Кровать', nightstand: 'Тумба', wardrobe: 'Шкаф', dresser: 'Комод', sofa: 'Диван', armchair: 'Кресло',
+    table: 'Стол журнальный', roundtable: 'Стол круглый', dining: 'Стол обеденный', desk: 'Рабочий стол', chair: 'Стул',
+    counter: 'Кухонный модуль', sink: 'Раковина / мойка', stove: 'Плита', fridge: 'Холодильник', washer: 'Стир./посудомоечная машина',
+    bath: 'Ванна', shower: 'Душ', toilet: 'Унитаз', shelf: 'Тумба / стеллаж', rug: 'Ковёр', plant: 'Растение', box: 'Блок / колонна'
+  };
   FP.MATERIALS = [['oak','Дуб'],['wood','Тёмное дерево'],['tile','Плитка'],['white','Белый'],['concrete','Бетон'],['carpet','Ковролин']];
   // [kind, name, width, depth, height, color]
   FP.CATALOG = [
@@ -61,7 +68,7 @@
       ['rooms', 'walls', 'openings', 'furniture'].forEach(k => { if (!Array.isArray(f[k])) f[k] = []; });
       f.rooms.forEach(r => { r.id = r.id || FP.uid(); r.name = r.name || 'Комната'; r.x = num(r.x, 0); r.y = num(r.y, 0); r.width = Math.max(.1, num(r.width, 3)); r.depth = Math.max(.1, num(r.depth, 3)); r.material = r.material || 'white'; r.color = r.color || '#eeeeee'; });
       f.walls = f.walls.filter(w => w && isFinite(+w.x1)).map(w => ({ id: w.id || FP.uid(), x1: +w.x1, y1: +w.y1, x2: +w.x2, y2: +w.y2, thickness: num(w.thickness, f.thickness), color: w.color }));
-      f.openings.forEach(o => { o.id = o.id || FP.uid(); o.offset = num(o.offset, 0); o.width = num(o.width, 0.9); o.kind = o.kind === 'window' ? 'window' : 'door'; o.flip = !!o.flip; });
+      f.openings.forEach(o => { o.id = o.id || FP.uid(); o.offset = num(o.offset, 0); o.width = num(o.width, 0.9); o.kind = (o.kind === 'window' || o.kind === 'gap') ? o.kind : 'door'; o.flip = !!o.flip; });
       f.furniture.forEach(m => { m.id = m.id || FP.uid(); m.kind = m.kind || 'box'; m.name = m.name || m.kind; m.x = num(m.x, 0); m.y = num(m.y, 0); m.width = num(m.width, .5); m.depth = num(m.depth, .5); m.height = num(m.height, .5); m.rotation = num(m.rotation, 0); m.color = m.color || '#bbbbbb'; });
     });
     return d;
@@ -193,7 +200,7 @@
       if (sill > 0) add(a.s, a.e, 0, sill, 'wall');
       add(a.s, a.e, sill + oh, Hf, 'wall');
       if (win) { add(a.s, a.e, sill, sill + oh, 'glass', o, a.own); P.push({ s: a.s, e: a.e, z0: 0, z1: Hf, type: 'block' }); }
-      else add(a.s, a.e, 0, oh, 'door', o, a.own);
+      else if (o.kind !== 'gap') add(a.s, a.e, 0, oh, 'door', o, a.own);
       cur = Math.max(cur, a.e);
     });
     add(cur, L, 0, Hf, 'wall');

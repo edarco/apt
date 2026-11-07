@@ -20,6 +20,8 @@
   <button id="btnCopy">Копировать</button>
   <label class="chk" title="Убирает поля, которых нет в формате floorplandrawer.com (кастомные стены, высоты окон и т.д.)"><input type="checkbox" id="compat"> совместимый экспорт</label>
   <button id="btnNew">Новый</button>
+  <button id="btnHelp">? Справка</button>
+  <button id="btnTheme" title="Тема">◐</button>
   <span class="grow"></span>
   <div class="seg"><button id="v2d" class="on">2D</button><button id="v3d">3D</button></div>
 </header>
@@ -62,6 +64,45 @@
   <h3>Вставьте JSON</h3>
   <textarea id="pasteTa" rows="14" style="width:520px;max-width:80vw"></textarea>
   <div class="dlgBtns"><button id="pasteOk">Загрузить</button><button id="pasteCancel">Отмена</button></div>
+</dialog>
+
+<dialog id="helpDlg">
+  <h3>Справка</h3>
+  <div id="helpBody" style="width:560px;max-width:80vw;max-height:70vh;overflow:auto;line-height:1.5">
+    <h4>Перемещение по плану (2D)</h4>
+    <ul>
+      <li><b>Тащить пустое место</b> — двигать холст</li>
+      <li><b>Стрелки</b> (без выбранного объекта) — сдвиг холста, <kbd>Shift</kbd> — быстрее</li>
+      <li><b>Колесо</b> — масштаб к курсору; <kbd>Shift</kbd>+колесо — по горизонтали; <kbd>Alt</kbd>+колесо — по вертикали</li>
+      <li><b>Трекпад:</b> два пальца — прокрутка/масштаб как у колеса</li>
+      <li><b>Пробел</b>+мышь, средняя или правая кнопка, инструмент <kbd>H</kbd> — панорама</li>
+      <li><kbd>F</kbd> — вписать весь план</li>
+    </ul>
+    <h4>Инструменты</h4>
+    <ul>
+      <li><kbd>V</kbd> выбор · <kbd>R</kbd> комната (тянуть) · <kbd>W</kbd> стена (клик — клик, двойной клик/Esc — конец, <kbd>Shift</kbd> — углы 45°)</li>
+      <li><kbd>D</kbd> дверь · <kbd>N</kbd> окно · <kbd>G</kbd> проём без двери — навести на стену и кликнуть</li>
+      <li><kbd>M</kbd> линейка (два клика)</li>
+      <li><kbd>Alt</kbd> — отключить прилипание</li>
+    </ul>
+    <h4>Редактирование</h4>
+    <ul>
+      <li>Мебель: клик в каталоге слева — добавить; тянуть — двигать; ручка сверху — поворот</li>
+      <li><kbd>[</kbd> <kbd>]</kbd> поворот ±15° (<kbd>Shift</kbd> ±90°) · стрелки с выбором — сдвиг (<kbd>Shift</kbd> = 1 см)</li>
+      <li><kbd>Ctrl+D</kbd> дубликат · <kbd>Delete</kbd> удалить · <kbd>Esc</kbd> сброс</li>
+      <li><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd> отмена / возврат · <kbd>Ctrl+S</kbd> экспорт JSON</li>
+      <li>Проём можно тянуть вдоль стены; размеры комнаты — ручки в углах или числа справа</li>
+    </ul>
+    <h4>3D</h4>
+    <ul>
+      <li>Облёт: ЛКМ — вращать, ПКМ/<kbd>Shift</kbd> — сдвиг, колесо — масштаб</li>
+      <li>Ходьба: <kbd>W A S D</kbd>/стрелки, <kbd>Q</kbd>/<kbd>E</kbd> поворот, <kbd>Shift</kbd> бег, мышь — взгляд</li>
+      <li>Колесо в ходьбе — угол обзора (шире — видно больше комнаты); <kbd>Shift</kbd>+колесо — рост глаз</li>
+      <li>Двойной клик по плану (2D) — встать в эту точку в 3D</li>
+      <li>Стены: полные / полупрозрачные / срезанные / без стен</li>
+    </ul>
+  </div>
+  <div class="dlgBtns"><button id="helpClose">Закрыть</button></div>
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

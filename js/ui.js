@@ -15,7 +15,7 @@
   FP.ui.walkHere = function (x, y) { FP.setView('3d'); FP.v3.walkAt(x, y); };
 
   // ---------- левая панель ----------
-  const TOOLS = [['select', 'V', 'Выбор'], ['room', 'R', 'Комната'], ['wall', 'W', 'Стена'], ['door', 'D', 'Дверь'], ['window', 'N', 'Окно'], ['measure', 'M', 'Линейка'], ['pan', 'H', 'Рука']];
+  const TOOLS = [['select', 'V', 'Выбор'], ['room', 'R', 'Комната'], ['wall', 'W', 'Стена'], ['door', 'D', 'Дверь'], ['window', 'N', 'Окно'], ['gap', 'G', 'Проём'], ['measure', 'M', 'Линейка'], ['pan', 'H', 'Рука']];
   function buildLeft() {
     const t = $('tools'); t.innerHTML = '';
     TOOLS.forEach(a => { const b = document.createElement('button'); b.dataset.tool = a[0]; b.innerHTML = a[2] + '<kbd>' + a[1] + '</kbd>'; b.onclick = () => { if (FP.view === '3d') FP.setView('2d'); FP.v2.setTool(a[0]); }; t.appendChild(b); });
@@ -117,9 +117,9 @@
     root.appendChild(el('h4', '', 'Добавить проём'));
     const sd = selIn([['n', 'Север (верх)'], ['s', 'Юг (низ)'], ['w', 'Запад (лево)'], ['e', 'Восток (право)']], 'n', () => {}); sd.onchange = null;
     root.appendChild(row('Сторона', sd));
-    const b = el('div', 'btns'); b.appendChild(btn('+ Дверь', () => FP.addOpening(r.id + ':' + sd.value, 'door'))); b.appendChild(btn('+ Окно', () => FP.addOpening(r.id + ':' + sd.value, 'window'))); root.appendChild(b);
+    const b = el('div', 'btns'); b.appendChild(btn('+ Дверь', () => FP.addOpening(r.id + ':' + sd.value, 'door'))); b.appendChild(btn('+ Окно', () => FP.addOpening(r.id + ':' + sd.value, 'window'))); b.appendChild(btn('+ Проём', () => FP.addOpening(r.id + ':' + sd.value, 'gap'))); root.appendChild(b);
     const ops = FP.floor().openings.filter(o => o.wallId.startsWith(r.id + ':'));
-    if (ops.length) { root.appendChild(el('h4', '', 'Проёмы комнаты')); const l = el('div', 'list'); ops.forEach(o => l.appendChild(btn((o.kind === 'door' ? 'Дверь' : 'Окно') + ' · ' + FP.wallLabel(o.wallId).split(' / ')[1] + ' · ' + o.width.toFixed(2) + ' м', () => FP.select('opening', o.id)))); root.appendChild(l); }
+    if (ops.length) { root.appendChild(el('h4', '', 'Проёмы комнаты')); const l = el('div', 'list'); ops.forEach(o => l.appendChild(btn(FP.OP_RU[o.kind] + ' · ' + FP.wallLabel(o.wallId).split(' / ')[1] + ' · ' + o.width.toFixed(2) + ' м', () => FP.select('opening', o.id)))); root.appendChild(l); }
     delRow(root, true);
   }
 
@@ -136,14 +136,14 @@
     root.appendChild(row('Угол, °', ai));
     root.appendChild(row('Толщина, м', numIn(w, 'thickness', { min: .03, step: .01 })));
     colorBlock(root, 'Цвет (3D)', w, 'color');
-    const b = el('div', 'btns'); b.appendChild(btn('+ Дверь', () => FP.addOpening(w.id, 'door'))); b.appendChild(btn('+ Окно', () => FP.addOpening(w.id, 'window'))); b.appendChild(btn('Развернуть', () => edit(() => { [w.x1, w.x2] = [w.x2, w.x1]; [w.y1, w.y2] = [w.y2, w.y1]; }))); root.appendChild(b);
+    const b = el('div', 'btns'); b.appendChild(btn('+ Дверь', () => FP.addOpening(w.id, 'door'))); b.appendChild(btn('+ Окно', () => FP.addOpening(w.id, 'window'))); b.appendChild(btn('+ Проём', () => FP.addOpening(w.id, 'gap'))); b.appendChild(btn('Развернуть', () => edit(() => { [w.x1, w.x2] = [w.x2, w.x1]; [w.y1, w.y2] = [w.y2, w.y1]; }))); root.appendChild(b);
     delRow(root, true);
   }
 
   function openP(root, o) {
-    root.appendChild(el('h3', '', o.kind === 'door' ? 'Дверь' : 'Окно'));
+    root.appendChild(el('h3', '', FP.OP_RU[o.kind]));
     root.appendChild(el('div', 'stat', '<span>Стена</span><b>' + FP.wallLabel(o.wallId) + '</b>'));
-    root.appendChild(row('Тип', selIn([['door', 'Дверь'], ['window', 'Окно']], o.kind, v => { o.kind = v; const d = FP.opDefaults(v); o.h = d.h; o.sill = d.sill; o.width = d.width; })));
+    root.appendChild(row('Тип', selIn([['door', 'Дверь'], ['window', 'Окно'], ['gap', 'Проём (без двери)']], o.kind, v => { o.kind = v; const d = FP.opDefaults(v); o.h = d.h; o.sill = d.sill; o.width = d.width; })));
     root.appendChild(row('Смещение, м', numIn(o, 'offset', { min: 0 })));
     root.appendChild(row('Ширина, м', numIn(o, 'width', { min: .2 })));
     const hh = { h: o.h != null ? o.h : FP.opDefaults(o.kind).h, sill: o.sill != null ? o.sill : FP.opDefaults(o.kind).sill };
@@ -160,7 +160,7 @@
   function furnP(root, m) {
     root.appendChild(el('h3', '', 'Мебель'));
     root.appendChild(row('Название', textIn(m, 'name')));
-    root.appendChild(row('Тип', selIn(['bed', 'nightstand', 'wardrobe', 'dresser', 'sofa', 'armchair', 'table', 'roundtable', 'dining', 'desk', 'chair', 'counter', 'sink', 'stove', 'fridge', 'washer', 'bath', 'shower', 'toilet', 'shelf', 'rug', 'plant', 'box'].map(k => [k, k]), m.kind, v => { m.kind = v; })));
+    root.appendChild(row('Тип', selIn(Object.keys(FP.KIND_RU).map(k => [k, FP.KIND_RU[k]]), m.kind, v => { m.kind = v; })));
     root.appendChild(row('X, м', numIn(m, 'x'))); root.appendChild(row('Y, м', numIn(m, 'y')));
     root.appendChild(row('Ширина, м', numIn(m, 'width', { min: .05 }))); root.appendChild(row('Глубина, м', numIn(m, 'depth', { min: .05 }))); root.appendChild(row('Высота, м', numIn(m, 'height', { min: .01 })));
     root.appendChild(row('Поворот, °', numIn(m, 'rotation', { step: 1, cb: v => { m.rotation = ((v % 360) + 360) % 360; } })));
@@ -202,6 +202,13 @@
     $('pasteCancel').onclick = () => $('pasteDlg').close();
     $('btnNew').onclick = () => { if (!confirm('Очистить проект? (Можно отменить через Ctrl+Z)')) return; FP.snap(); FP.data = FP.normalize({ name: 'Новый проект' }); FP.fi = 0; FP.sel = null; FP.changed(); FP.v2.fit(); };
     $('v2d').onclick = () => FP.setView('2d'); $('v3d').onclick = () => FP.setView('3d');
+    $('btnHelp').onclick = () => $('helpDlg').showModal();
+    $('helpClose').onclick = () => $('helpDlg').close();
+    // тема
+    const applyTheme = t => { document.documentElement.dataset.theme = t; try { localStorage.setItem('fp_theme', t); } catch (e) {} };
+    let th = 'light'; try { th = localStorage.getItem('fp_theme') || 'light'; } catch (e) {}
+    applyTheme(th);
+    $('btnTheme').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
   }
 
   // ---------- клавиатура ----------
@@ -216,7 +223,7 @@
       return;
     }
     if (FP.view === '3d') return;
-    const key = k.toLowerCase(), map = { v: 'select', r: 'room', w: 'wall', d: 'door', n: 'window', m: 'measure', h: 'pan' };
+    const key = k.toLowerCase(), map = { v: 'select', r: 'room', w: 'wall', d: 'door', n: 'window', g: 'gap', m: 'measure', h: 'pan' };
     if (map[key] && !e.altKey) { FP.v2.setTool(map[key]); return; }
     if (key === 'f') FP.v2.fit();
     else if (k === ']') FP.rotateSel(e.shiftKey ? 90 : 15);

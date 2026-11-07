@@ -89,6 +89,9 @@
     if (o.kind === 'window') {
       c.strokeStyle = '#2f78d0'; c.lineWidth = 1.5; c.strokeRect(0, -ht * .55, len, ht * 1.1);
       c.beginPath(); c.moveTo(0, 0); c.lineTo(len, 0); c.stroke();
+    } else if (o.kind === 'gap') {            // проём без двери: пунктир по краям
+      c.strokeStyle = '#888'; c.lineWidth = 1; c.setLineDash([4, 3]);
+      c.beginPath(); c.moveTo(0, -ht); c.lineTo(0, ht); c.moveTo(len, -ht); c.lineTo(len, ht); c.stroke(); c.setLineDash([]);
     } else {
       const perp = p.nx * (-p.uy) + p.ny * p.ux, ly = (perp >= 0 ? 1 : -1) * (o.swing === -1 ? -1 : 1);
       const hx = o.flip ? len : 0, a1 = o.flip ? Math.PI : 0, d = o.flip ? -ly : ly, a2 = a1 + d * Math.PI / 2;
@@ -189,7 +192,7 @@
       const L = Math.hypot(tmp.x1 - tmp.x0, tmp.y1 - tmp.y0), ang = Math.atan2(tmp.y1 - tmp.y0, tmp.x1 - tmp.x0) * 180 / Math.PI;
       lbl(L.toFixed(2) + ' м  ' + ang.toFixed(0) + '°', sx((tmp.x0 + tmp.x1) / 2), sy((tmp.y0 + tmp.y1) / 2) - 14);
     }
-    if ((V.tool === 'door' || V.tool === 'window') && hover) drawOpening(hover.w, hover.o, .6);
+    if ((V.tool === 'door' || V.tool === 'window' || V.tool === 'gap') && hover) drawOpening(hover.w, hover.o, .6);
     if (meas) {
       c.strokeStyle = '#7a2fd0'; c.fillStyle = '#7a2fd0'; c.lineWidth = 2; c.beginPath(); c.moveTo(sx(meas.a.x), sy(meas.a.y)); c.lineTo(sx(meas.b.x), sy(meas.b.y)); c.stroke();
       [meas.a, meas.b].forEach(q => { c.beginPath(); c.arc(sx(q.x), sy(q.y), 4, 0, 7); c.fill(); });
@@ -240,7 +243,7 @@
         }
         V.draw(); return;
       }
-      case 'door': case 'window':
+      case 'door': case 'window': case 'gap':
         if (hover) { FP.addOpening(hover.w.id, V.tool, hover.o.offset); hover = null; } return;
       case 'measure': {
         const q = ptSnap(x, y) || { x: snv(x, e), y: snv(y, e) };
@@ -309,7 +312,7 @@
     }
     if (V.tool === 'wall' && tmp) { const q = wallEnd(e); tmp.x1 = q.x; tmp.y1 = q.y; }
     else if (V.tool === 'measure' && meas && !meas.done) { meas.b = ptSnap(x, y) || { x: snv(x, e), y: snv(y, e) }; }
-    else if (V.tool === 'door' || V.tool === 'window') {
+    else if (V.tool === 'door' || V.tool === 'window' || V.tool === 'gap') {
       const walls = FP.getWalls(FP.floor()); let best = null, bd = 16 / V.s;
       walls.forEach(w => { const r = segProj(x, y, w); if (r.d < bd) { bd = r.d; best = { w, t: r.t }; } });
       if (best) { const d = FP.opDefaults(V.tool), L = FP.wlen(best.w), wd = Math.min(d.width, L); hover = { w: best.w, o: { offset: Math.max(0, Math.min(L - wd, snv(best.t - wd / 2, e))), width: wd, kind: V.tool, flip: false, swing: 1 } }; } else hover = null;
