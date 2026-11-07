@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Планировщик квартиры</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="top">
+  <input id="projName" title="Название проекта">
+  <select id="floorSel" title="Этаж"></select>
+  <button id="addFloor">+ этаж</button><button id="delFloor">− этаж</button>
+  <span class="sep"></span>
+  <button id="undo" title="Ctrl+Z">↶</button><button id="redo" title="Ctrl+Shift+Z">↷</button>
+  <span class="sep"></span>
+  <button id="btnImport">Импорт</button><input type="file" id="fileIn" accept=".json,application/json" hidden>
+  <button id="btnPaste">Вставить JSON</button>
+  <button id="btnExport" title="Ctrl+S">Экспорт</button>
+  <button id="btnCopy">Копировать</button>
+  <label class="chk" title="Убирает поля, которых нет в формате floorplandrawer.com (кастомные стены, высоты окон и т.д.)"><input type="checkbox" id="compat"> совместимый экспорт</label>
+  <button id="btnNew">Новый</button>
+  <span class="grow"></span>
+  <div class="seg"><button id="v2d" class="on">2D</button><button id="v3d">3D</button></div>
+</header>
+
+<div id="main">
+  <aside id="left">
+    <div id="tools"></div>
+    <div id="catalog"></div>
+  </aside>
+  <section id="center">
+    <canvas id="c2d"></canvas>
+    <div id="c3d"></div>
+    <div id="bar3d" hidden>
+      <label>Стены
+        <select id="o3walls">
+          <option value="full">Полные</option>
+          <option value="glass">Полупрозрачные</option>
+          <option value="cut">Срезанные</option>
+          <option value="none">Без стен</option>
+        </select>
+      </label>
+      <label>Срез <input type="range" id="o3cut" min="0.2" max="2.5" step="0.1" value="1"><span id="o3cutv">1.0 м</span></label>
+      <label>Прозрачность <input type="range" id="o3op" min="0.1" max="0.8" step="0.05" value="0.3"></label>
+      <label>Камера
+        <select id="o3cam"><option value="orbit">Облёт</option><option value="top">Сверху</option><option value="walk">Изнутри (ходьба)</option></select>
+      </label>
+      <label>Комната <select id="o3room"></select></label>
+      <button id="o3go">Встать в комнату</button>
+      <button id="o3tour">Автообход</button>
+      <label class="chk"><input type="checkbox" id="o3ceil" checked> потолок</label>
+      <button id="o3fit">Вписать</button>
+      <span id="o3help"></span>
+    </div>
+    <div id="status"></div>
+  </section>
+  <aside id="right"><div id="props"></div></aside>
+</div>
+
+<dialog id="pasteDlg">
+  <h3>Вставьте JSON</h3>
+  <textarea id="pasteTa" rows="14" style="width:520px;max-width:80vw"></textarea>
+  <div class="dlgBtns"><button id="pasteOk">Загрузить</button><button id="pasteCancel">Отмена</button></div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/model.js"></script>
+<script src="js/view2d.js"></script>
+<script src="js/view3d.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
