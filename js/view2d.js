@@ -55,7 +55,7 @@
     for (let i = f.furniture.length - 1; i >= 0; i--) {
       const m = f.furniture[i], a = -(m.rotation || 0) * Math.PI / 180, dx = x - m.x, dy = y - m.y;
       const lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a);
-      if (Math.abs(lx) <= m.width / 2 && Math.abs(ly) <= m.depth / 2) return { type: 'furniture', id: m.id };
+      if (Math.abs(lx) <= Math.max(m.width / 2, 8 / V.s) && Math.abs(ly) <= Math.max(m.depth / 2, 8 / V.s)) return { type: 'furniture', id: m.id };
     }
     for (const w of f.walls) if (segProj(x, y, w).d <= Math.max((w.thickness || f.thickness) / 2, tol)) return { type: 'wall', id: w.id };
     let best = null, ba = 1e9;
@@ -100,12 +100,26 @@
     }
     c.restore();
   }
+  // условные значки: розетка / выключатель / светильник (фиксированный размер в пикселях)
+  function drawSym(m, sym) {
+    c.save(); c.translate(sx(m.x), sy(m.y)); c.rotate((m.rotation || 0) * Math.PI / 180);
+    c.strokeStyle = { outlet: '#c05a00', switch: '#1e6fbf', light: '#d19a00' }[sym]; c.fillStyle = '#fff'; c.lineWidth = 1.8; c.beginPath();
+    if (sym === 'switch') c.rect(-6, -6, 12, 12); else c.arc(0, 0, sym === 'light' ? 9 : 6, 0, 7);
+    c.fill(); c.stroke(); c.beginPath();
+    if (sym === 'light') { c.moveTo(-6, -6); c.lineTo(6, 6); c.moveTo(6, -6); c.lineTo(-6, 6); }
+    else if (sym === 'outlet') { c.moveTo(-2.5, -2); c.lineTo(-2.5, 2); c.moveTo(2.5, -2); c.lineTo(2.5, 2); }
+    else { c.moveTo(0, -3); c.lineTo(0, 3); }
+    c.stroke(); c.restore();
+  }
   function drawFurn(m) {
     const s = V.s, w = m.width * s, d = m.depth * s;
+    const M = FP.model(m); if (M && M.sym) { drawSym(m, M.sym); return; }
     c.save(); c.translate(sx(m.x), sy(m.y)); c.rotate((m.rotation || 0) * Math.PI / 180); if (m.flipX) c.scale(-1, 1);
-    const round = m.kind === 'plant' || m.kind === 'roundtable';
-    c.fillStyle = m.color || '#bbb'; c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1; c.globalAlpha = m.kind === 'rug' ? .75 : 1;
-    c.beginPath(); if (round) c.ellipse(0, 0, w / 2, d / 2, 0, 0, 7); else c.rect(-w / 2, -d / 2, w, d); c.fill(); c.globalAlpha = 1; c.stroke();
+    const round = (M && (M.plan === 'round' || M.plan === 'oval')) || m.kind === 'plant' || m.kind === 'roundtable';
+    const hi = M && (M.ceil || (m.elev != null ? m.elev : (M.elev || 0)) > 0.3);       // навесное / потолочное: пунктир
+    c.fillStyle = m.color || '#bbb'; c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1; c.globalAlpha = m.kind === 'rug' ? .75 : hi ? .55 : 1;
+    if (hi) c.setLineDash([4, 3]);
+    c.beginPath(); if (round) c.ellipse(0, 0, w / 2, d / 2, 0, 0, 7); else c.rect(-w / 2, -d / 2, w, d); c.fill(); c.globalAlpha = 1; c.stroke(); c.setLineDash([]);
     c.strokeStyle = 'rgba(0,0,0,.35)';
     const E = (x, y, rx, ry) => { c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 7); c.stroke(); };
     const R = (x, y, a, b) => c.strokeRect(x, y, a, b);
@@ -291,10 +305,10 @@
           o.x = nx; o.y = ny;
         } else if (drag.type === 'wall') {
           const ddx = snv(dx, e), ddy = snv(dy, e); o.x1 = drag.o.x1 + ddx; o.x2 = drag.o.x2 + ddx; o.y1 = drag.o.y1 + ddy; o.y2 = drag.o.y2 + ddy;
-        } else if (drag.type === 'furniture') { o.x = snv(drag.o.x + dx, e); o.y = snv(drag.o.y + dy, e); }
+        } else if (drag.type === 'furniture') { o.x = snv(drag.o.x + dx, e); o.y = snv(drag.o.y + dy, e); if (!e.altKey) FP.wallSnap(o); }
         else if (drag.type === 'opening') {
           const w = FP.getWalls(f).find(q => q.id === o.wallId);
-          if (w) { const L = FP.wlen(w), ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, pr = (x - w.x1) * ux + (y - w.y1) * uy; o.offset = Math.max(0, Math.min(L - o.width, snv(pr - o.width / 2, e))); }
+          if (w) { const L = FP.wlen(w), ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, pr = (x - w.x1) * ux + (y - w.y1) * uy; o.o.offset = Math.max(0, Math.min(L - o.width, snv(pr - o.width / 2, e))); delete o.k; }
         }
       } else if (drag.mode === 'corner') {
         const od = drag.o, fx = drag.c.includes('l') ? od.x + od.width : od.x, fy = drag.c.includes('t') ? od.y + od.depth : od.y;

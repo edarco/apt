@@ -47,6 +47,8 @@ input[type=color]{padding:0;width:34px;height:26px;border:1px solid var(--line);
 .hint{color:var(--mut);font-size:12px}
 dialog{border:1px solid var(--line);border-radius:10px;padding:14px}
 .dlgBtns{display:flex;gap:8px;margin-top:10px;justify-content:flex-end}
+#catalog summary{cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:8px 0 4px}
+#catalog details[open]>summary{color:var(--ink)}
 /* тёмная тема */
 [data-theme=dark]{--bg:#1b1c20;--panel:#25262b;--line:#3b3c44;--ink:#e7e7ea;--mut:#a0a0aa}
 [data-theme=dark] button,
@@ -57,3 +59,14 @@ dialog{border:1px solid var(--line);border-radius:10px;padding:14px}
 [data-theme=dark] .row>span{color:var(--mut)}
 [data-theme=dark] #status,[data-theme=dark] #bar3d{background:rgba(37,38,43,.92);color:var(--ink)}
 [data-theme=dark] dialog{background:var(--panel);color:var(--ink)}
+
+#matGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;width:600px;max-width:80vw;height:46vh;overflow:auto;margin:8px 0;align-content:start}
+.sw{cursor:pointer;border:2px solid transparent;border-radius:8px;padding:3px;font-size:11px;line-height:1.2;text-align:center}
+.sw:hover{background:rgba(128,128,128,.12)}
+.sw.on{border-color:var(--acc)}
+.sw .ph{height:64px;border-radius:5px;overflow:hidden;background:rgba(128,128,128,.2)}
+.sw .ph canvas{width:100%;height:100%;display:block}
+.sw .nm{margin-top:3px}
+.matb{flex:1;display:flex;align-items:center;gap:6px;text-align:left;min-width:0}
+.matb span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msw{width:28px;height:20px;border-radius:4px;border:1px solid rgba(0,0,0,.3);flex:none;background-size:cover;display:inline-block}

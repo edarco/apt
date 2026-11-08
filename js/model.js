@@ -67,7 +67,7 @@
       f.height = num(f.height, 2.7); f.thickness = num(f.thickness, 0.16);
       ['rooms', 'walls', 'openings', 'furniture'].forEach(k => { if (!Array.isArray(f[k])) f[k] = []; });
       f.rooms.forEach(r => { r.id = r.id || FP.uid(); r.name = r.name || 'Комната'; r.x = num(r.x, 0); r.y = num(r.y, 0); r.width = Math.max(.1, num(r.width, 3)); r.depth = Math.max(.1, num(r.depth, 3)); r.material = r.material || 'white'; r.color = r.color || '#eeeeee'; });
-      f.walls = f.walls.filter(w => w && isFinite(+w.x1)).map(w => ({ id: w.id || FP.uid(), x1: +w.x1, y1: +w.y1, x2: +w.x2, y2: +w.y2, thickness: num(w.thickness, f.thickness), color: w.color }));
+      f.walls = f.walls.filter(w => w && isFinite(+w.x1)).map(w => ({ id: w.id || FP.uid(), x1: +w.x1, y1: +w.y1, x2: +w.x2, y2: +w.y2, thickness: num(w.thickness, f.thickness), color: w.color, fin: w.fin }));
       f.openings.forEach(o => { o.id = o.id || FP.uid(); o.offset = num(o.offset, 0); o.width = num(o.width, 0.9); o.kind = (o.kind === 'window' || o.kind === 'gap') ? o.kind : 'door'; o.flip = !!o.flip; });
       f.furniture.forEach(m => { m.id = m.id || FP.uid(); m.kind = m.kind || 'box'; m.name = m.name || m.kind; m.x = num(m.x, 0); m.y = num(m.y, 0); m.width = num(m.width, .5); m.depth = num(m.depth, .5); m.height = num(m.height, .5); m.rotation = num(m.rotation, 0); m.color = m.color || '#bbbbbb'; });
     });
@@ -76,20 +76,24 @@
   FP.toJSON = function (compat) {
     const d = JSON.parse(JSON.stringify(FP.data));
     d.updatedAt = new Date().toISOString();
+    delete d.models;                                  // свои модели мебели, использованные в проекте, едут вместе с файлом
+    const usedM = {}; d.floors.forEach(f => f.furniture.forEach(m => { if (FP.userLib.models[m.kind]) usedM[m.kind] = FP.userLib.models[m.kind]; }));
+    if (Object.keys(usedM).length) d.models = usedM;
     if (compat) {
-      delete d.settings;
+      delete d.settings; delete d.models;
       d.floors.forEach(f => {
         f.walls = [];
         f.openings = f.openings.filter(o => o.wallId.includes(':')).map(o => ({ id: o.id, wallId: o.wallId, offset: o.offset, width: o.width, kind: o.kind, flip: !!o.flip }));
         f.furniture.forEach(m => { delete m.flipX; });
+        f.rooms.forEach(r => { delete r.wt; delete r.wall; delete r.fin; delete r.floor; delete r.floorRot; });
       });
-      f.rooms.forEach(r => { delete r.wt; delete r.wall; });
     }
     return JSON.stringify(d, (k, v) => typeof v === 'number' ? +v.toFixed(4) : v, 2);
   };
   FP.load = function (text) {
     let d; try { d = JSON.parse(text); } catch (e) { return false; }
     if (!d || !Array.isArray(d.floors)) return false;
+    if (d.models) FP.mergeModels(d.models);
     FP.data = FP.normalize(d); FP.fi = 0; FP.sel = null; FP.resetHistory(); FP.changed();
     return true;
   };
@@ -140,6 +144,14 @@
       ['n', 's', 'w', 'e'].forEach(k => out.push({ id: r.id + ':' + k, side: k, room: r, x1: d[k][0], y1: d[k][1], x2: d[k][2], y2: d[k][3], t: t[k], e1: d[k][4], e2: d[k][5] }));
     });
     f.walls.forEach(w => { const t = w.thickness || f.thickness; out.push({ id: w.id, custom: w, x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2, t, e1: t / 2, e2: t / 2, color: w.color }); });
+    // позиция проёма = доля длины стены (o.k, центр проёма): проём следует за стеной при изменении размеров
+    const byId = new Map(out.map(q => [q.id, q]));
+    f.openings.forEach(o => {
+      const w = byId.get(o.wallId); if (!w) return;
+      const L = FP.wlen(w); if (L < 1e-6) return;
+      if (o.k == null) o.k = (o.offset + o.width / 2) / L;
+      else o.offset = Math.max(0, Math.min(Math.max(0, L - o.width), o.k * L - o.width / 2));
+    });
     return out;
   };
 
@@ -152,6 +164,7 @@
         if (!o.wallId.startsWith(r.id + ':')) return;
         const side = o.wallId.split(':')[1];
         o.offset = Math.max(0, o.offset - ((side === 'n' || side === 's') ? tw : tn) / 2);
+        delete o.k;
       });
       r.x += tw / 2; r.y += tn / 2;
       r.width = Math.max(.1, r.width - (tw + te) / 2); r.depth = Math.max(.1, r.depth - (tn + ts) / 2);
@@ -247,6 +260,7 @@
     if (so && FP.sel.type === 'room') { x = so.x + so.width / 2; y = so.y + so.depth / 2; } else { const c = FP.v2.center(); x = c.x; y = c.y; }
     const k = FP.settings().snap, sn = v => +(Math.round(v / k) * k).toFixed(3);
     const m = { id: FP.uid(), kind: it[0], name: it[1], width: it[2], depth: it[3], height: it[4], color: it[5], x: sn(x), y: sn(y), rotation: 0 };
+    if (it[6] != null) m.elev = it[6];      // высота над полом из каталога (розетки, шкафы и т.д.)
     f.furniture.push(m); FP.select('furniture', m.id); FP.changed();
   };
   FP.removeSel = function () {
@@ -274,5 +288,21 @@
   FP.rotateSel = function (deg) {
     const o = FP.selObj(); if (!o || FP.sel.type !== 'furniture') return; FP.snap();
     o.rotation = ((((o.rotation || 0) + deg) % 360) + 360) % 360; FP.changed();
+  };
+  // Навесное (розетки, шкафчики, зеркала, ТВ...): при перетаскивании около стены прилипает к её поверхности и поворачивается задней стороной к стене
+  FP.wallSnap = function (m) {
+    const M = FP.model(m); if (!M || !M.wall) return;
+    let best = null, bd = 0.6;
+    FP.getWalls(FP.floor()).forEach(w => {
+      const L = FP.wlen(w); if (L < .01) return;
+      const ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, px = m.x - w.x1, py = m.y - w.y1;
+      const t = Math.max(0, Math.min(L, px * ux + py * uy)), nx = -uy, ny = ux, sd = px * nx + py * ny, side = sd >= 0 ? 1 : -1;
+      const d = Math.abs(sd) - w.t / 2;
+      if (d < bd) { bd = d; best = { w, t, nx: nx * side, ny: ny * side, ux, uy }; }
+    });
+    if (!best) return;
+    const dist = best.w.t / 2 + m.depth / 2, bx = best.w.x1 + best.ux * best.t, by = best.w.y1 + best.uy * best.t;
+    m.x = +(bx + best.nx * dist).toFixed(3); m.y = +(by + best.ny * dist).toFixed(3);
+    m.rotation = Math.round(((Math.atan2(-best.nx, best.ny) * 180 / Math.PI) + 360) % 360);
   };
 })();

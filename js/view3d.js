@@ -4,9 +4,17 @@
   let edgeMat = null;
   const orbit = { yaw: 0.6, pitch: 0.75, dist: 14, tx: 0, ty: 0, tz: 0 };
   const walk = { x: 0, z: 0, yaw: 0, pitch: 0, eye: 1.6 };
-  const opt = { walls: 'full', cut: 1.0, cam: 'orbit', ceil: true, op: 0.3, fov: 78 };
+  const opt = { walls: 'full', cut: 1.0, cam: 'orbit', ceil: true, op: 0.3, fov: 78, night: false };
+  let hemi;
   const keys = {}, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const isWalk = () => opt.cam === 'walk';
+
+  const gcache = new Map();
+  function bgeo(w, h, d) {
+    const k = w.toFixed(4) + '|' + h.toFixed(4) + '|' + d.toFixed(4); let g = gcache.get(k);
+    if (!g) { g = new THREE.BoxGeometry(w, h, d); gcache.set(k, g); }
+    return g;
+  }
 
   function mat(color, o) {
     const k = color + (o ? JSON.stringify(o) : ''); let m = cache.get(k);
@@ -14,12 +22,70 @@
     return m;
   }
   function box(w, h, d, color, x, y, z, o) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(Math.max(w, .001), Math.max(h, .001), Math.max(d, .001)), mat(color, o));
+    const m = new THREE.Mesh(bgeo(Math.max(w, .001), Math.max(h, .001), Math.max(d, .001)), mat(color, o));
     m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; return m;
   }
+  // ---------- отделка: материалы с текстурами ----------
+  const fcache = new Map();
+  function fmat(spec, inner) {                       // inner: внутренняя грань стены (polygonOffset, чтобы не мерцала на общей стене)
+    const P = FP.MAT.get(spec.m), col = spec.c || P.c, key = P.id + '|' + col + '|' + (inner ? 1 : 0);
+    let m = fcache.get(key);
+    if (!m) {
+      const o = { color: new THREE.Color(P.tex ? '#ffffff' : col) };
+      if (P.tex) o.map = FP.MAT.texture(P, col);
+      if (inner) { o.polygonOffset = true; o.polygonOffsetFactor = -1; o.polygonOffsetUnits = -1; }
+      m = new THREE.MeshLambertMaterial(o); fcache.set(key, m);
+    }
+    return m;
+  }
+  // перезапись UV грани куба (0..1) в метры: текстуры получают реальный масштаб
+  function uvFace(geo, f, fn) {
+    const a = geo.attributes.uv;
+    for (let i = f * 4; i < f * 4 + 4; i++) { const r = fn(a.getX(i), a.getY(i)); a.setXY(i, r[0], r[1]); }
+    a.needsUpdate = true;
+  }
+  // кусок стены: делится по высоте на «низ» и «верх»; внутренняя грань — отделка комнаты, внешняя — по умолчанию
+  function wallSeg(w, s, e, z0, z1, ux, uy, ang) {
+    const fin = FP.wallFin(w), len = e - s, cx = w.x1 + ux * (s + e) / 2, cz = w.y1 + uy * (s + e) / 2, hz = fin.inn.low ? fin.inn.h : 0, zones = [];
+    if (hz > z0 + .001 && hz < z1 - .001) zones.push([z0, hz, 'low'], [hz, z1, 'up']);
+    else zones.push([z0, z1, (fin.inn.low && hz >= z1 - .001) ? 'low' : 'up']);
+    const capM = mat(FP.MAT.eff(fin.both ? fin.inn.up : fin.out));
+    zones.forEach(q => {
+      const a = q[0], b = q[1], inn = fmat(q[2] === 'low' ? fin.inn.low : fin.inn.up, true), out = fmat(fin.out, false);
+      const zin = fin.both ? [inn, inn] : (fin.inSign > 0 ? [inn, out] : [out, inn]);       // [грань +z, грань -z]
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len, b - a, w.t), [capM, capM, capM, capM, zin[0], zin[1]]);
+      m.position.set(cx, (a + b) / 2, cz); m.rotation.y = ang; m.castShadow = m.receiveShadow = true;
+      uvFace(m.geometry, 4, (u, v) => [s + u * len, a + v * (b - a)]);
+      uvFace(m.geometry, 5, (u, v) => [s + (1 - u) * len, a + v * (b - a)]);
+      root.add(m); m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), edgeMat));
+    });
+  }
+
   function clearRoot() {
     while (root.children.length) { const o = root.children[0]; root.remove(o); o.traverse(n => { if (n.geometry) n.geometry.dispose(); }); }
     cache.forEach(m => m.dispose()); cache.clear();
+  }
+
+  // ---------- модели из библиотеки (FP.LIB) ----------
+  const TOK = { wh: '#f4f2ee', bk: '#2a2a2c', ch: '#c9ccd0', gl: '#9ecbf0', dw: '#6f5a44' };
+  function shade(col, k) { const c = new THREE.Color(col); if (k < 1) c.multiplyScalar(k); else c.lerp(new THREE.Color('#ffffff'), k - 1); return '#' + c.getHexString(); }
+  const pcol = (t, main) => t === 'm' ? main : t === 'd' ? shade(main, .72) : t === 'l' ? shade(main, 1.35) : (TOK[t] || t);
+  function buildModel(m, M) {
+    const g = new THREE.Group(), main = m.color || '#bbb';
+    M.parts.forEach(p => {
+      const col = pcol(p.c || 'm', main), o = {}; let mesh, h;
+      if (p.op) { o.transparent = true; o.opacity = p.op; o.depthWrite = false; }
+      if (p.em && opt.night) o.emissive = new THREE.Color(col);          // светится только в режиме «вечер»
+      if (p.b) { mesh = new THREE.Mesh(bgeo(p.b[0], p.b[1], p.b[2]), mat(col, o)); h = p.b[1]; }
+      else if (p.y) { mesh = new THREE.Mesh(new THREE.CylinderGeometry(p.y[0], p.y[2], p.y[1], 22), mat(col, o)); h = p.y[1]; }
+      else { mesh = new THREE.Mesh(new THREE.SphereGeometry(p.s[0], 16, 12), mat(col, o)); h = p.s[0] * 2; }
+      mesh.position.set(p.at[0], p.rot ? p.at[1] : p.at[1] + h / 2, p.at[2]);   // у повёрнутых деталей at = центр
+      if (p.rot) mesh.rotation.set(p.rot[0] * Math.PI / 180, p.rot[1] * Math.PI / 180, p.rot[2] * Math.PI / 180);
+      if (p.k) mesh.scale.set(p.k[0], p.k[1], p.k[2]);
+      mesh.castShadow = !p.op && !p.em; mesh.receiveShadow = true; g.add(mesh);
+    });
+    g.scale.set(m.width / M.w, m.height / M.h, m.depth / M.d);
+    return g;
   }
 
   function buildFurn(m) {
@@ -63,17 +129,24 @@
 
   function build() {
     clearRoot(); colRects = [];
+    hemi.intensity = opt.night ? .12 : .55; sun.intensity = opt.night ? .1 : .85; scene.background.set(opt.night ? '#1a2030' : '#e3e8ee');
     const f = FP.floor(), st = FP.data.settings, walls = FP.getWalls(f), walking = isWalk();
     const wm = (walking && opt.walls !== 'glass') ? 'full' : opt.walls, cutH = wm === 'cut' ? opt.cut : undefined;
     // пол, потолок
     f.rooms.forEach(r => {
-      const fl = box(r.width, .04, r.depth, r.color, r.x + r.width / 2, -.02, r.y + r.depth / 2); fl.castShadow = false; root.add(fl);
+
+      const fs = FP.floorSpec(r), fcol = FP.MAT.eff(fs), frot = r.floorRot === 90;
+      const fl = new THREE.Mesh(new THREE.BoxGeometry(r.width, .04, r.depth), [mat(fcol), mat(fcol), fmat(fs, false), mat(fcol), mat(fcol), mat(fcol)]);
+      uvFace(fl.geometry, 2, (u, v) => { const X = r.x + u * r.width, Z = r.y + (1 - v) * r.depth; return frot ? [Z, X] : [X, Z]; });   // мировые координаты: рисунок продолжается между комнатами
+      fl.position.set(r.x + r.width / 2, -.02, r.y + r.depth / 2); fl.receiveShadow = true; root.add(fl);
+
       if (walking && opt.ceil) { const cm = new THREE.Mesh(new THREE.PlaneGeometry(r.width, r.depth), mat('#fbfaf7')); cm.rotation.x = Math.PI / 2; cm.position.set(r.x + r.width / 2, f.height, r.y + r.depth / 2); root.add(cm); }
     });
     // стены
     walls.forEach(w => {
       const L = FP.wlen(w); if (L < .01) return;
       const ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, ang = -Math.atan2(uy, ux), col = w.color || st.wallColor;
+      const put = (a0, a1, z0, z1, th, cc) => { const b = box(a1 - a0, z1 - z0, th, cc, w.x1 + ux * (a0 + a1) / 2, (z0 + z1) / 2, w.y1 + uy * (a0 + a1) / 2); b.rotation.y = ang; root.add(b); return b; };
       FP.pieces(f, walls, w, undefined).forEach(p => { // коллизии: всегда полные высоты
         if ((p.type === 'wall' && p.z0 === 0) || p.type === 'block') {
           let s = p.s, e = p.e; if (s <= .0005) s -= w.e1; if (e >= L - .0005) e += w.e2;
@@ -84,25 +157,38 @@
       FP.pieces(f, walls, w, cutH).forEach(p => {
         if (p.type === 'wall') {
           let s = p.s, e = p.e; if (s <= .0005) s -= w.e1; if (e >= L - .0005) e += w.e2;
-          const gl = wm === 'glass';
-          const m = box(e - s, p.z1 - p.z0, w.t, col, w.x1 + ux * (s + e) / 2, (p.z0 + p.z1) / 2, w.y1 + uy * (s + e) / 2,
-                        gl ? { transparent: true, opacity: opt.op, depthWrite: false } : undefined);
-          if (gl) m.castShadow = false;
-          m.rotation.y = ang; root.add(m);
-          if (!gl) m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), edgeMat));
+          if (wm === 'glass') {
+            const m = box(e - s, p.z1 - p.z0, w.t, col, w.x1 + ux * (s + e) / 2, (p.z0 + p.z1) / 2, w.y1 + uy * (s + e) / 2, { transparent: true, opacity: opt.op, depthWrite: false });
+            m.castShadow = false; m.rotation.y = ang; root.add(m);
+          } else wallSeg(w, s, e, p.z0, p.z1, ux, uy, ang);
         } else if (p.type === 'glass' && p.own) {
           const m = box(p.e - p.s, p.z1 - p.z0, .03, '#9ecbf0', w.x1 + ux * (p.s + p.e) / 2, (p.z0 + p.z1) / 2, w.y1 + uy * (p.s + p.e) / 2, { transparent: true, opacity: .35, depthWrite: false }); m.rotation.y = ang; m.castShadow = false; root.add(m);
+          const fr = '#f5f3ee', fq = .05, mid = (p.s + p.e) / 2, T = w.t + .02;
+          put(p.s, p.s + fq, p.z0, p.z1, T, fr); put(p.e - fq, p.e, p.z0, p.z1, T, fr);                    // рама
+          put(p.s, p.e, p.z1 - fq, p.z1, T, fr); put(p.s, p.e, p.z0, p.z0 + fq, T, fr);
+          put(mid - .02, mid + .02, p.z0, p.z1, .05, fr);                                                 // импост
+          put(p.s - .04, p.e + .04, p.z0 - .03, p.z0, w.t + .1, '#ffffff');                               // подоконник
         } else if (p.type === 'door' && p.own) {
           const o = p.o, pos = FP.openPos(w, o), hAlong = o.flip ? p.e : p.s, hx = w.x1 + ux * hAlong, hy = w.y1 + uy * hAlong;
           const al = o.flip ? -1 : 1, sw = o.swing === -1 ? -1 : 1, a = 80 * Math.PI / 180;
           const dx = Math.cos(a) * ux * al + Math.sin(a) * pos.nx * sw, dy = Math.cos(a) * uy * al + Math.sin(a) * pos.ny * sw, wd = p.e - p.s;
           const m = box(wd, p.z1 - p.z0, .04, '#8a6a4a', hx + dx * wd / 2, (p.z0 + p.z1) / 2, hy + dy * wd / 2); m.rotation.y = -Math.atan2(dy, dx); root.add(m);
+          const hl = (p.e - p.s) / 2 - .09, hHand = 1.0 - (p.z0 + p.z1) / 2;
+          [-1, 1].forEach(sd => m.add(box(.12, .025, .03, '#c9ccd0', hl, hHand, sd * .035)));               // ручка с двух сторон
+          put(p.s - .04, p.s, 0, p.z1 + .04, w.t + .03, '#f4f1ea'); put(p.e, p.e + .04, 0, p.z1 + .04, w.t + .03, '#f4f1ea');   // наличники
+          put(p.s - .04, p.e + .04, p.z1, p.z1 + .04, w.t + .03, '#f4f1ea');
         }
       });
     });
     // мебель
+    let lamps = 0;
     f.furniture.forEach(m => {
-      const g = buildFurn(m); g.position.set(m.x, 0, m.y); g.rotation.y = -(m.rotation || 0) * Math.PI / 180; if (m.flipX) g.scale.x = -1; root.add(g);
+      const M = FP.model(m), g = M ? buildModel(m, M) : buildFurn(m);      // нет модели в библиотеке: старая процедурная форма
+      const yb = M ? (M.ceil ? f.height - m.height : (m.elev != null ? m.elev : (M.elev || 0))) : 0;
+      g.position.set(m.x, yb, m.y); g.rotation.y = -(m.rotation || 0) * Math.PI / 180; if (m.flipX) g.scale.x *= -1; root.add(g);
+      if (opt.night && M && M.light && lamps < 14) {
+        lamps++; const L = M.light, pl = new THREE.PointLight(L.c, L.i, L.d); pl.position.set(m.x, yb + (L.y || 0) * m.height / M.h, m.y); root.add(pl);
+      }
     });
     // свет/тени под размер плана
     const b = bounds(); sun.target.position.set(b.cx, 0, b.cz); sun.position.set(b.cx + b.r * .8, b.r * 1.6, b.cz + b.r * .5);
@@ -164,7 +250,10 @@
   }
   function loop(t) {
     raf = requestAnimationFrame(loop); const dt = Math.min(.05, (t - last) / 1000 || 0); last = t;
+
     if (needs) { build(); needs = false; }
+    // if (needs) { const t0 = performance.now(); build(); needs = false; console.log('build ms:', Math.round(performance.now() - t0)); }
+
     if (isWalk()) updateWalk(dt);
     placeCamera(); renderer.render(scene, camera);
   }
@@ -178,7 +267,7 @@
     scene = new THREE.Scene(); scene.background = new THREE.Color('#e3e8ee');
     edgeMat = new THREE.LineBasicMaterial({ color: 0x7d7568 });
     camera = new THREE.PerspectiveCamera(60, 1, .03, 400);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f98, .55));
+    hemi = new THREE.HemisphereLight(0xffffff, 0x8a8f98, .55); scene.add(hemi);
     sun = new THREE.DirectionalLight(0xffffff, .85); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; scene.add(sun, sun.target);
     root = new THREE.Group(); scene.add(root);
     new ResizeObserver(resize).observe(host);
@@ -220,6 +309,7 @@
     FP.$('o3walls').onchange = e => { opt.walls = e.target.value; needs = true; };
     FP.$('o3cut').oninput = e => { opt.cut = +e.target.value; if (opt.walls !== 'cut') { opt.walls = 'cut'; FP.$('o3walls').value = 'cut'; } needs = true; updateHelp(); };
     FP.$('o3ceil').onchange = e => { opt.ceil = e.target.checked; needs = true; };
+    FP.$('o3night').onchange = e => { opt.night = e.target.checked; needs = true; };
     FP.$('o3cam').onchange = e => {
       const prev = opt.cam; opt.cam = e.target.value;
       if (opt.cam === 'top') { orbit.pitch = 1.55; orbit.yaw = 0; }

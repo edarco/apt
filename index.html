@@ -52,6 +52,7 @@
       <button id="o3go">Встать в комнату</button>
       <button id="o3tour">Автообход</button>
       <label class="chk"><input type="checkbox" id="o3ceil" checked> потолок</label>
+      <label class="chk"><input type="checkbox" id="o3night"> вечер (лампы)</label>
       <button id="o3fit">Вписать</button>
       <span id="o3help"></span>
     </div>
@@ -64,6 +65,20 @@
   <h3>Вставьте JSON</h3>
   <textarea id="pasteTa" rows="14" style="width:520px;max-width:80vw"></textarea>
   <div class="dlgBtns"><button id="pasteOk">Загрузить</button><button id="pasteCancel">Отмена</button></div>
+</dialog>
+
+<dialog id="matDlg">
+  <h3 id="matTitle">Материал</h3>
+  <div id="matTabs" class="btns"></div>
+  <div id="matGrid"></div>
+  <label class="row"><span>Свой цвет</span><input type="color" id="matColor"><button id="matReset">Сбросить цвет</button></label>
+  <div class="dlgBtns"><button id="matClose">Готово</button></div>
+</dialog>
+
+<dialog id="customDlg">
+  <h3>Своя мебель</h3>
+  <div id="customForm" style="min-width:320px"></div>
+  <div class="dlgBtns"><button id="customOk">Создать</button><button id="customCancel">Отмена</button></div>
 </dialog>
 
 <dialog id="helpDlg">
@@ -93,6 +108,13 @@
       <li><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd> отмена / возврат · <kbd>Ctrl+S</kbd> экспорт JSON</li>
       <li>Проём можно тянуть вдоль стены; размеры комнаты — ручки в углах или числа справа</li>
     </ul>
+    <h4>Материалы и отделка</h4>
+    <ul>
+      <li>Комната → «Пол»: покрытие (ламинат, паркет, плитка), направление рисунка</li>
+      <li>Комната → «Отделка стен»: сторона света, «Верх» и «Низ» (плитка/панели до заданной высоты)</li>
+      <li>В окне материалов можно задать «Свой цвет» для любого материала</li>
+      <li>Отделка видна в режиме 3D; на плане 2D показывается цвет пола</li>
+    </ul>
     <h4>3D</h4>
     <ul>
       <li>Облёт: ЛКМ — вращать, ПКМ/<kbd>Shift</kbd> — сдвиг, колесо — масштаб</li>
@@ -107,8 +129,16 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/model.js"></script>
+<script src="js/library.js"></script>
+<script src="js/materials.js"></script>
 <script src="js/view2d.js"></script>
 <script src="js/view3d.js"></script>
+<script src="js/ui_form.js"></script>
+<script src="js/ui_mat.js"></script>
+<script src="js/ui_props.js"></script>
+<script src="js/ui_files.js"></script>
+<script src="js/ui_keys.js"></script>
+<script src="js/ui_lib.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>
