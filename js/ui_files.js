@@ -3,9 +3,9 @@
 
   // ---------- файлы ----------
   function download() {
-    const txt = FP.toJSON($('compat').checked), a = document.createElement('a');
+    const txt = FP.toJSON(), a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' }));
-    a.download = (FP.data.name || 'plan').replace(/[^\wа-яё\- ]+/gi, '_') + '.floorplandrawer.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    a.download = (FP.data.name || 'plan').replace(/[^\wа-яё\- ]+/gi, '_') + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
   function loadText(t) { if (FP.load(t)) { FP.v2.fit(); if (FP.view === '3d') FP.v3.fit(); refreshTop(); } else alert('Не удалось прочитать JSON'); }
 
@@ -23,7 +23,7 @@
     $('delFloor').onclick = () => { if (FP.data.floors.length < 2) return alert('Нужен хотя бы один этаж'); if (!confirm('Удалить этаж «' + FP.floor().name + '»?')) return; edit(() => { FP.data.floors.splice(FP.fi, 1); FP.fi = 0; FP.sel = null; }); };
     $('undo').onclick = () => FP.undo(); $('redo').onclick = () => FP.redo();
     $('btnExport').onclick = download;
-    $('btnCopy').onclick = () => { const t = FP.toJSON($('compat').checked); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => alert('JSON скопирован'), () => { $('pasteTa').value = t; $('pasteDlg').showModal(); $('pasteTa').select(); }); };
+    $('btnCopy').onclick = () => { const t = FP.toJSON(); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => alert('JSON скопирован'), () => { $('pasteTa').value = t; $('pasteDlg').showModal(); $('pasteTa').select(); }); };
     $('btnImport').onclick = () => $('fileIn').click();
     $('fileIn').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => loadText(r.result); r.readAsText(f); e.target.value = ''; };
     $('btnPaste').onclick = () => { $('pasteTa').value = ''; $('pasteDlg').showModal(); };

@@ -4,6 +4,7 @@
   FP.uid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 
   FP.PALETTE = ['#ddc5a3','#c8a97e','#8b6b4a','#d1d8d4','#eee9df','#cfd4d8','#a8b0b5','#e8d5c4','#b5c4b1','#c9b8d4','#f2d7d5','#f6e7a8','#9fc5e8','#444a50'];
+  FP.FPAL = ['#e8e1d3','#d8cdb7','#c9b79c','#b89b78','#a07b52','#7a5636','#5a3e2b','#3b2a20','#f2f0ec','#cfcfcb','#a3a5a6','#6b6e72','#3a3d42','#1f2023','#b7c2a6','#7d9078','#4f6b5a','#9fb1c4','#5f7a94','#2f4057','#c98b6b','#a8553d','#d6a93c','#8a2f3a','#d9a9a3','#b7a4c8'];
   FP.OP_RU = { door: 'Дверь', window: 'Окно', gap: 'Проём' };
   FP.KIND_RU = {
     bed: 'Кровать', nightstand: 'Тумба', wardrobe: 'Шкаф', dresser: 'Комод', sofa: 'Диван', armchair: 'Кресло',
@@ -73,21 +74,12 @@
     });
     return d;
   };
-  FP.toJSON = function (compat) {
+  FP.toJSON = function () {
     const d = JSON.parse(JSON.stringify(FP.data));
     d.updatedAt = new Date().toISOString();
     delete d.models;                                  // свои модели мебели, использованные в проекте, едут вместе с файлом
     const usedM = {}; d.floors.forEach(f => f.furniture.forEach(m => { if (FP.userLib.models[m.kind]) usedM[m.kind] = FP.userLib.models[m.kind]; }));
     if (Object.keys(usedM).length) d.models = usedM;
-    if (compat) {
-      delete d.settings; delete d.models;
-      d.floors.forEach(f => {
-        f.walls = [];
-        f.openings = f.openings.filter(o => o.wallId.includes(':')).map(o => ({ id: o.id, wallId: o.wallId, offset: o.offset, width: o.width, kind: o.kind, flip: !!o.flip }));
-        f.furniture.forEach(m => { delete m.flipX; });
-        f.rooms.forEach(r => { delete r.wt; delete r.wall; delete r.fin; delete r.floor; delete r.floorRot; });
-      });
-    }
     return JSON.stringify(d, (k, v) => typeof v === 'number' ? +v.toFixed(4) : v, 2);
   };
   FP.load = function (text) {
@@ -194,7 +186,7 @@
       if (w2.id === w.id) { out.push({ s: o.offset, e: o.offset + o.width, o, own: true }); return; }
       const L2 = FP.wlen(w2) || 1, u2x = (w2.x2 - w2.x1) / L2, u2y = (w2.y2 - w2.y1) / L2;
       if (Math.abs(ux * u2y - uy * u2x) > 0.01) return;
-      if (Math.abs((w2.x1 - w.x1) * (-uy) + (w2.y1 - w.y1) * ux) > 0.08) return;
+      if (Math.abs((w2.x1 - w.x1) * (-uy) + (w2.y1 - w.y1) * ux) > 0.5 * Math.max(w.t, w2.t) + 0.03) return;
       const ax = w2.x1 + u2x * o.offset, ay = w2.y1 + u2y * o.offset;
       const pa = (ax - w.x1) * ux + (ay - w.y1) * uy, pb = pa + (u2x * ux + u2y * uy) * o.width;
       out.push({ s: Math.min(pa, pb), e: Math.max(pa, pb), o, own: false });

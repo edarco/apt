@@ -342,6 +342,8 @@
   const LEG = { oak: 'lam_oak_nat', wood: 'lam_walnut', tile: 'tile_sq30_grey', white: 'plain', concrete: 'cem_grey', carpet: 'carpet_grey' };
   FP.floorSpec = r => r.floor && r.floor.m ? { m: r.floor.m, c: r.floor.c || null } : { m: LEG[r.material] || 'plain', c: r.color };
   FP.defWallFin = () => { const s = FP.data.settings; return s.wallFin && s.wallFin.m ? { m: s.wallFin.m, c: s.wallFin.c || null } : { m: 'paint', c: s.wallColor || '#f2efe9' }; };
+  FP.defCeil = () => { const s = FP.data.settings; return s.ceilFin && s.ceilFin.m ? { m: s.ceilFin.m, c: s.ceilFin.c || null } : { m: 'paint', c: '#fbfaf7' }; };
+  FP.ceilSpec = r => r.ceilFin && r.ceilFin.m ? { m: r.ceilFin.m, c: r.ceilFin.c || null } : FP.defCeil();
   FP.zoneNorm = (z, def) => {
     z = z || {}; const up = z.up || def, low = z.low || null;
     return { up: { m: up.m, c: up.c || null }, low: low ? { m: low.m, c: low.c || null } : null, h: low ? (z.h > 0 ? +z.h : 1.2) : 0 };
@@ -351,7 +353,7 @@
   // отделка стены из FP.getWalls(): inSign — какая грань (+z или -z) смотрит в комнату
   FP.wallFin = function (w) {
     const def = FP.defWallFin();
-    if (w.room) return { both: false, inSign: { n: 1, s: -1, w: -1, e: 1 }[w.side], inn: FP.zoneOf(w.room, w.side), out: def };
+    if (w.room) return { both: false, inSign: w.inSign != null ? w.inSign : { n: 1, s: -1, w: -1, e: 1 }[w.side], inn: FP.zoneOf(w.room, w.side), out: def };
     return { both: true, inn: FP.wallZone(w.custom || {}), out: def };
   };
 })();

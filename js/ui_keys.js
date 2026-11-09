@@ -12,11 +12,12 @@
       return;
     }
     if (FP.view === '3d') return;
-    const key = k.toLowerCase(), map = { v: 'select', r: 'room', w: 'wall', d: 'door', n: 'window', g: 'gap', m: 'measure', h: 'pan' };
+    const key = k.toLowerCase(), map = { v: 'select', r: 'room', p: 'poly', w: 'wall', d: 'door', n: 'window', g: 'gap', m: 'measure', h: 'pan' };
     if (map[key] && !e.altKey) { FP.v2.setTool(map[key]); return; }
     if (key === 'f') FP.v2.fit();
     else if (k === ']') FP.rotateSel(e.shiftKey ? 90 : 15);
     else if (k === '[') FP.rotateSel(e.shiftKey ? -90 : -15);
+    else if (k === 'Enter' && FP.v2.tool === 'poly') FP.v2.finishPoly();
     else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); FP.removeSel(); }
     else if (k === 'Escape') { if (FP.v2.tool !== 'select') FP.v2.setTool('select'); else FP.select(null); FP.v2.cancel(); }
 

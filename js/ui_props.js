@@ -43,6 +43,7 @@
     root.appendChild(row('Высота потолка, м', numIn(f, 'height', { min: 1.8, step: .05 })));
     root.appendChild(row('Толщина стен, м', numIn(f, 'thickness', { min: .03, step: .01 })));
     root.appendChild(matRow('Стены по умолчанию', 'wall', FP.defWallFin(), sp => { s.wallFin = sp; }, 'Отделка стен по умолчанию (и внешних сторон)'));
+    root.appendChild(matRow('Потолок по умолчанию', 'wall', FP.defCeil(), sp => { s.ceilFin = sp; }, 'Потолок по умолчанию'));
     root.appendChild(row('Шаг сетки, м', selIn([[0.01, '0.01'], [0.05, '0.05'], [0.1, '0.10'], [0.25, '0.25'], [0.5, '0.50']], s.snap, v => { s.snap = +v; })));
     root.appendChild(row('Размер комнаты', selIn([['inner', 'чистый (по внутр. стороне)'], ['center', 'по осям стен']], s.wallMode, v => { s.wallMode = v; })));
     const cb = el('div', 'btns');
@@ -52,29 +53,78 @@
     root.appendChild(row('Размеры на плане', chkIn(s.dims, v => { s.dims = v; })));
     root.appendChild(row('Мебель с комнатой', chkIn(s.moveFurn, v => { s.moveFurn = v; })));
     const b = el('div', 'btns'); b.appendChild(btn('+ Комната', () => FP.addRoom())); b.appendChild(btn('+ Стена', () => FP.addWall())); root.appendChild(b);
-    root.appendChild(el('h4', '', 'Площади'));
-    const tot = f.rooms.reduce((a, r) => a + r.width * r.depth, 0), un = FP.unionArea(f.rooms), per = f.rooms.reduce((a, r) => a + 2 * (r.width + r.depth), 0);
 
+    const bg = el('div', 'btns');
+    bg.appendChild(btn('Комнаты из контуров стен', () => { const n = FP.roomsFromWalls(); alert(n ? 'Создано комнат: ' + n : 'Замкнутых контуров из свободных стен не найдено'); }));
+    root.appendChild(bg);
+
+    root.appendChild(el('h4', '', 'Площади'));
+
+    const tot = f.rooms.reduce((a, r) => a + FP.roomArea(r), 0), un = FP.unionArea(f.rooms), per = f.rooms.reduce((a, r) => a + FP.roomPerim(r), 0);
     const outer = FP.inner() ? FP.unionArea(f.rooms.map(r => {
+      if (r.poly) return { poly: FP.offsetPoly(r.poly, r.poly.map((_, i) => -FP.wt(r, 'p' + i))) };
       const tn = FP.wt(r, 'n'), ts = FP.wt(r, 's'), tw = FP.wt(r, 'w'), te = FP.wt(r, 'e');
       return { x: r.x - tw, y: r.y - tn, width: r.width + tw + te, depth: r.depth + tn + ts };
     })) : un;
+
     [['Полезная площадь (сумма)', tot.toFixed(2) + ' м²'], ['Полезная без наложений', un.toFixed(2) + ' м²'], ['Вместе с толщиной стен', outer.toFixed(2) + ' м²'], ['Периметр комнат', per.toFixed(2) + ' м'], ['Объём (полезный)', (un * f.height).toFixed(1) + ' м³'], ['Мебели / дверей / окон', f.furniture.length + ' / ' + f.openings.filter(o => o.kind === 'door').length + ' / ' + f.openings.filter(o => o.kind === 'window').length]]
       .forEach(a => root.appendChild(el('div', 'stat', '<span>' + a[0] + '</span><b>' + a[1] + '</b>')));
 
+    const MA = FP.mergeAreas(f, FP.getWalls(f));
+    Object.keys(MA).forEach(id => { const names = f.rooms.filter(q => q.merge === id).map(q => q.name).join(' + '); root.appendChild(el('div', 'stat', '<span>Объединено: ' + names + '</span><b>' + MA[id].toFixed(2) + ' м²</b>')); });
+
     root.appendChild(el('h4', '', 'Комнаты'));
-    const l = el('div', 'list'); f.rooms.forEach(r => l.appendChild(btn(r.name + ' — ' + (r.width * r.depth).toFixed(2) + ' м²', () => FP.select('room', r.id)))); root.appendChild(l);
+    const l = el('div', 'list'); f.rooms.forEach(r => l.appendChild(btn(r.name + ' — ' + FP.roomArea(r).toFixed(2) + ' м²' + (r.merge ? ' ⛓' : ''), () => FP.select('room', r.id)))); root.appendChild(l);
     if (f.walls.length) { root.appendChild(el('h4', '', 'Свободные стены')); const l2 = el('div', 'list'); f.walls.forEach((w, i) => l2.appendChild(btn('Стена ' + (i + 1) + ' — ' + FP.wlen(w).toFixed(2) + ' м', () => FP.select('wall', w.id)))); root.appendChild(l2); }
     root.appendChild(el('p', 'hint', 'Клик по объекту на плане выбирает его. Двойной клик по плану — войти в 3D и встать в эту точку.'));
+  }
+
+  function shapeBlock(root, r) {
+    if (r.poly) return;
+    root.appendChild(el('h4', '', 'Форма'));
+    const cs = selIn([['tr', 'правый верхний'], ['tl', 'левый верхний'], ['br', 'правый нижний'], ['bl', 'левый нижний']], 'tr', () => {}); cs.onchange = null;
+    root.appendChild(row('Вырезать угол', cs));
+    const b = el('div', 'btns');
+    b.appendChild(btn('Г-образная', () => edit(() => FP.lShape(r, cs.value))));
+    b.appendChild(btn('→ Многоугольник', () => edit(() => FP.toPoly(r))));
+    root.appendChild(b);
+  }
+  function polyBlock(root, r) {
+    root.appendChild(el('h4', '', 'Контур (вершины, м)'));
+    r.poly.forEach((q, i) => {
+      const d = el('div', 'row'); d.appendChild(el('span', '', 'Вершина ' + (i + 1)));
+      [0, 1].forEach(k => {
+        const inp = el('input'); inp.type = 'number'; inp.step = .01; inp.value = +q[k].toFixed(3);
+        inp.onchange = () => { const v = parseFloat(inp.value); if (isNaN(v)) return; edit(() => { q[k] = v; FP.syncBox(r); }); };
+        d.appendChild(inp);
+      });
+      const x = btn('✕', () => { if (r.poly.length > 3) edit(() => FP.polyRemove(r, i)); }, 'danger'); x.title = 'Удалить вершину'; d.appendChild(x);
+      root.appendChild(d);
+    });
+    root.appendChild(el('p', 'hint', 'На плане: тяните квадраты-вершины, кружок «+» на стороне добавляет вершину, Shift+клик по вершине удаляет её.'));
+  }
+  function mergeBlock(root, r) {
+    const f = FP.floor(), adj = FP.adjacentRooms(f, r);
+    root.appendChild(el('h4', '', 'Объединение комнат'));
+    if (r.merge) {
+      const grp = f.rooms.filter(q => q.merge === r.merge), A = FP.mergeAreas(f, FP.getWalls(f))[r.merge] || 0;
+      root.appendChild(el('div', 'stat', '<span>В группе</span><b>' + grp.map(q => q.name).join(', ') + '</b>'));
+      root.appendChild(el('div', 'stat', '<span>Площадь объединённой</span><b>' + A.toFixed(2) + ' м²</b>'));
+      const bb = el('div', 'btns'); bb.appendChild(btn('Убрать из группы', () => edit(() => FP.unmergeRoom(r)))); root.appendChild(bb);
+    }
+    const cand = adj.filter(q => !(r.merge && q.merge === r.merge));
+    if (cand.length) { const l = el('div', 'list'); cand.forEach(q => l.appendChild(btn('Объединить с «' + q.name + '»', () => edit(() => FP.mergeRooms(r, q))))); root.appendChild(l); }
+    else if (!r.merge) root.appendChild(el('p', 'hint', 'Нет смежных комнат. Они должны стоять вплотную: стена к стене.'));
   }
 
   function roomP(root, r) {
     root.appendChild(el('h3', '', 'Комната'));
     root.appendChild(row('Название', textIn(r, 'name')));
-    root.appendChild(row('X, м', numIn(r, 'x'))); root.appendChild(row('Y, м', numIn(r, 'y')));
-    root.appendChild(row('Ширина, м', numIn(r, 'width', { min: .1 }))); root.appendChild(row('Глубина, м', numIn(r, 'depth', { min: .1 })));
-    root.appendChild(el('div', 'stat', '<span>Площадь</span><b>' + (r.width * r.depth).toFixed(2) + ' м²</b>'));
-    root.appendChild(el('div', 'stat', '<span>Периметр</span><b>' + (2 * (r.width + r.depth)).toFixed(2) + ' м</b>'));
+
+    if (!r.poly) { root.appendChild(row('X, м', numIn(r, 'x'))); root.appendChild(row('Y, м', numIn(r, 'y'))); root.appendChild(row('Ширина, м', numIn(r, 'width', { min: .1 }))); root.appendChild(row('Глубина, м', numIn(r, 'depth', { min: .1 }))); }
+    root.appendChild(el('div', 'stat', '<span>Площадь</span><b>' + FP.roomArea(r).toFixed(2) + ' м²</b>'));
+    root.appendChild(el('div', 'stat', '<span>Периметр</span><b>' + FP.roomPerim(r).toFixed(2) + ' м</b>'));
+    shapeBlock(root, r); if (r.poly) polyBlock(root, r); mergeBlock(root, r);
 
     root.appendChild(el('h4', '', 'Пол'));
     root.appendChild(matRow('Покрытие', 'floor', FP.floorSpec(r), s => { r.floor = s; r.color = FP.MAT.eff(s); }, 'Покрытие пола'));
@@ -85,7 +135,10 @@
 
     root.appendChild(el('h4', '', 'Отделка стен (внутренняя сторона)'));
     const scSel = el('select');
-    [['all', 'Все стены'], ['n', 'Север'], ['s', 'Юг'], ['w', 'Запад'], ['e', 'Восток']].forEach(a => { const o = el('option'); o.value = a[0]; o.textContent = a[1] + (a[0] !== 'all' && r.fin && r.fin[a[0]] ? ' ●' : ''); scSel.appendChild(o); });
+    (r.poly ? [['all', 'Все стены']].concat(r.poly.map((_, i) => ['p' + i, 'Сторона ' + (i + 1)])) : [['all', 'Все стены'], ['n', 'Север'], ['s', 'Юг'], ['w', 'Запад'], ['e', 'Восток']]).forEach(a => { const o = el('option'); o.value = a[0]; o.textContent = a[1] + (a[0] !== 'all' && r.fin && r.fin[a[0]] ? ' ●' : ''); scSel.appendChild(o); });
+
+    if (![...scSel.options].some(o => o.value === finScope)) finScope = 'all';
+
     scSel.value = finScope; scSel.onchange = () => { finScope = scSel.value; FP.ui.props(); };
     root.appendChild(row('Сторона', scSel));
     finBlock(root, () => FP.zoneOf(r, finScope), fn => { const z = clone(FP.zoneOf(r, finScope)); fn(z); r.fin = r.fin || {}; r.fin[finScope] = z; });
@@ -94,20 +147,24 @@
     bw2.appendChild(btn('Отделку → всем комнатам', () => edit(() => { FP.floor().rooms.forEach(q => { if (q !== r) q.fin = clone(r.fin || {}); }); })));
     root.appendChild(bw2);
     root.appendChild(el('p', 'hint', 'Сторона с отдельной отделкой отмечена ●. Она заменяет «Все стены». Внешняя сторона берётся из «Стены по умолчанию» (настройки этажа).'));
-
+    root.appendChild(el('h4', '', 'Потолок'));
+    root.appendChild(matRow('Покрытие', 'wall', FP.ceilSpec(r), s => { r.ceilFin = s; }, 'Потолок'));
+    const bc = el('div', 'btns');
+    bc.appendChild(btn('Этот потолок → всем комнатам', () => edit(() => { const s = clone(FP.ceilSpec(r)); FP.floor().rooms.forEach(q => { q.ceilFin = clone(s); }); })));
+    root.appendChild(bc);
     root.appendChild(el('h4', '', 'Толщина стен комнаты, м'));
     const all = el('input'); all.type = 'number'; all.step = .01; all.min = .03; all.placeholder = FP.floor().thickness;
     all.value = r.wall != null ? r.wall : '';
     all.onchange = () => { const v = parseFloat(all.value); edit(() => { if (v > 0) { r.wall = v; delete r.wt; } else { delete r.wall; delete r.wt; } }); };
     root.appendChild(row('Все стены', all));
-    [['n', 'Север'], ['s', 'Юг'], ['w', 'Запад'], ['e', 'Восток']].forEach(([k, n]) => {
+    (r.poly ? r.poly.map((_, i) => ['p' + i, 'Сторона ' + (i + 1)]) : [['n', 'Север'], ['s', 'Юг'], ['w', 'Запад'], ['e', 'Восток']]).forEach(([k, n]) => {
       const i = el('input'); i.type = 'number'; i.step = .01; i.min = .03; i.value = +FP.wt(r, k).toFixed(3);
       i.onchange = () => { const v = parseFloat(i.value); if (!(v > 0)) return; edit(() => { r.wt = r.wt || {}; r.wt[k] = v; }); };
       root.appendChild(row(n, i));
     });
 
     root.appendChild(el('h4', '', 'Добавить проём'));
-    const sd = selIn([['n', 'Север (верх)'], ['s', 'Юг (низ)'], ['w', 'Запад (лево)'], ['e', 'Восток (право)']], 'n', () => {}); sd.onchange = null;
+    const sd = selIn(r.poly ? r.poly.map((_, i) => ['p' + i, 'Сторона ' + (i + 1)]) : [['n', 'Север (верх)'], ['s', 'Юг (низ)'], ['w', 'Запад (лево)'], ['e', 'Восток (право)']], r.poly ? 'p0' : 'n', () => {}); sd.onchange = null;
     root.appendChild(row('Сторона', sd));
     const b = el('div', 'btns'); b.appendChild(btn('+ Дверь', () => FP.addOpening(r.id + ':' + sd.value, 'door'))); b.appendChild(btn('+ Окно', () => FP.addOpening(r.id + ':' + sd.value, 'window'))); b.appendChild(btn('+ Проём', () => FP.addOpening(r.id + ':' + sd.value, 'gap'))); root.appendChild(b);
     const ops = FP.floor().openings.filter(o => o.wallId.startsWith(r.id + ':'));
@@ -163,7 +220,10 @@
     [['⟲ 90', -90], ['⟲ 15', -15], ['⟳ 15', 15], ['⟳ 90', 90]].forEach(a => b.appendChild(btn(a[0], () => FP.rotateSel(a[1]))));
     root.appendChild(b);
     const b2 = el('div', 'btns'); b2.appendChild(btn('Отзеркалить', () => edit(() => { m.flipX = !m.flipX; }))); b2.appendChild(btn('Поменять ширину/глубину', () => edit(() => { [m.width, m.depth] = [m.depth, m.width]; }))); root.appendChild(b2);
-    colorBlock(root, 'Цвет', m, 'color');
+    if (FP.isLamp(MM)) root.appendChild(row('Включён', chkIn(m.on !== false, v => { m.on = v; })));
+    root.appendChild(row('Отделка', selIn([['auto', 'Авто (по типу)'], ['matte', 'Матовая краска'], ['gloss', 'Глянец / лак'], ['wood', 'Дерево'], ['fabric', 'Ткань'], ['leather', 'Кожа'], ['plastic', 'Пластик'], ['chrome', 'Металл (блеск)']], m.finish || 'auto', v => { m.finish = v; })));
+    colorBlock(root, 'Цвет', m, 'color', FP.FPAL);
+    if (MM && MM.parts.some(p => p.c === 'dw')) { if (!m.color2) m.color2 = '#6f5a44'; colorBlock(root, 'Каркас / ножки', m, 'color2', FP.FPAL); }
     delRow(root, true);
   }
 

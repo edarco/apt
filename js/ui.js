@@ -15,7 +15,7 @@
   FP.ui.walkHere = function (x, y) { FP.setView('3d'); FP.v3.walkAt(x, y); };
 
   // ---------- левая панель ----------
-  const TOOLS = [['select', 'V', 'Выбор'], ['room', 'R', 'Комната'], ['wall', 'W', 'Стена'], ['door', 'D', 'Дверь'], ['window', 'N', 'Окно'], ['gap', 'G', 'Проём'], ['measure', 'M', 'Линейка'], ['pan', 'H', 'Рука']];
+  const TOOLS = [['select', 'V', 'Выбор'], ['room', 'R', 'Комната'], ['poly', 'P', 'Многоуг.'], ['wall', 'W', 'Стена'], ['door', 'D', 'Дверь'], ['window', 'N', 'Окно'], ['gap', 'G', 'Проём'], ['measure', 'M', 'Линейка'], ['pan', 'H', 'Рука']];
   function buildLeft() {
     const t = $('tools'); t.innerHTML = '';
     TOOLS.forEach(a => { const b = document.createElement('button'); b.dataset.tool = a[0]; b.innerHTML = a[2] + '<kbd>' + a[1] + '</kbd>'; b.onclick = () => { if (FP.view === '3d') FP.setView('2d'); FP.v2.setTool(a[0]); }; t.appendChild(b); });

@@ -18,7 +18,6 @@
   <button id="btnPaste">Вставить JSON</button>
   <button id="btnExport" title="Ctrl+S">Экспорт</button>
   <button id="btnCopy">Копировать</button>
-  <label class="chk" title="Убирает поля, которых нет в формате floorplandrawer.com (кастомные стены, высоты окон и т.д.)"><input type="checkbox" id="compat"> совместимый экспорт</label>
   <button id="btnNew">Новый</button>
   <button id="btnHelp">? Справка</button>
   <button id="btnTheme" title="Тема">◐</button>
@@ -53,6 +52,9 @@
       <button id="o3tour">Автообход</button>
       <label class="chk"><input type="checkbox" id="o3ceil" checked> потолок</label>
       <label class="chk"><input type="checkbox" id="o3night"> вечер (лампы)</label>
+      <button id="o3lampsOn" title="Включить все лампы">Лампы: вкл</button>
+      <button id="o3lampsOff" title="Выключить все лампы">Лампы: выкл</button>
+      <label>Яркость ламп <input type="range" id="o3lamp" min="0.3" max="2.5" step="0.1" value="1"></label>
       <button id="o3fit">Вписать</button>
       <span id="o3help"></span>
     </div>
@@ -98,6 +100,9 @@
       <li><kbd>V</kbd> выбор · <kbd>R</kbd> комната (тянуть) · <kbd>W</kbd> стена (клик — клик, двойной клик/Esc — конец, <kbd>Shift</kbd> — углы 45°)</li>
       <li><kbd>D</kbd> дверь · <kbd>N</kbd> окно · <kbd>G</kbd> проём без двери — навести на стену и кликнуть</li>
       <li><kbd>M</kbd> линейка (два клика)</li>
+      <li><kbd>P</kbd> комната-многоугольник: клик — вершина; закрыть — клик по первой точке, двойной клик или <kbd>Enter</kbd>; <kbd>Shift</kbd> — по осям</li>
+      <li>Выбранный многоугольник: тяните вершины, кружок «+» на стороне добавляет вершину, <kbd>Shift</kbd>+клик по вершине удаляет её</li>
+      <li>Комната → «Объединение комнат»: убирает стену между смежными комнатами и показывает общую площадь</li>
       <li><kbd>Alt</kbd> — отключить прилипание</li>
     </ul>
     <h4>Редактирование</h4>
@@ -122,6 +127,7 @@
       <li>Колесо в ходьбе — угол обзора (шире — видно больше комнаты); <kbd>Shift</kbd>+колесо — рост глаз</li>
       <li>Двойной клик по плану (2D) — встать в эту точку в 3D</li>
       <li>Стены: полные / полупрозрачные / срезанные / без стен</li>
+      <li>Лампы: включите «вечер», затем кликайте по лампе в 3D (вкл/выкл) или используйте кнопки «Лампы» в панели</li>
     </ul>
   </div>
   <div class="dlgBtns"><button id="helpClose">Закрыть</button></div>
@@ -129,6 +135,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/model.js"></script>
+<script src="js/polygon.js"></script>
 <script src="js/library.js"></script>
 <script src="js/materials.js"></script>
 <script src="js/view2d.js"></script>

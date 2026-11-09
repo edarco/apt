@@ -146,6 +146,7 @@
   FP.refreshCatalog = () => { FP.CATALOG = FP.BASE_CATALOG.concat(FP.userLib.catalog); };
   FP.refreshCatalog();
   FP.model = m => FP.LIB.models[m.kind] || null;
+  FP.isLamp = M => !!(M && (M.light || (M.parts || []).some(p => p.em)));     // есть что включать (лампа, экран, подсветка)
   FP.addUserLib = function (o) {
     FP.mergeModels(o.models);
     Object.keys(o.models || {}).forEach(k => { if (FP.LIB.models[k]) FP.userLib.models[k] = FP.LIB.models[k]; });

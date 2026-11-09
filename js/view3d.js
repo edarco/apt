@@ -4,7 +4,7 @@
   let edgeMat = null;
   const orbit = { yaw: 0.6, pitch: 0.75, dist: 14, tx: 0, ty: 0, tz: 0 };
   const walk = { x: 0, z: 0, yaw: 0, pitch: 0, eye: 1.6 };
-  const opt = { walls: 'full', cut: 1.0, cam: 'orbit', ceil: true, op: 0.3, fov: 78, night: false };
+  const opt = { walls: 'full', cut: 1.0, cam: 'orbit', ceil: true, op: 0.3, fov: 78, night: false, lamp: 1 };
   let hemi;
   const keys = {}, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const isWalk = () => opt.cam === 'walk';
@@ -61,6 +61,19 @@
     });
   }
 
+  // плоская заливка многоугольника (пол / потолок): pts [[x,z]...], y — высота, dir = ±1 (куда смотрит нормаль), uv(X,Z) → текстурные координаты в метрах
+  function flatGeo(pts, y, dir, uv) {
+    const tri = THREE.ShapeUtils.triangulateShape(pts.map(p => new THREE.Vector2(p[0], p[1])), []), pos = [], nor = [], uvs = [], idx = [];
+    pts.forEach(p => { pos.push(p[0], y, p[1]); nor.push(0, dir, 0); const q = uv(p[0], p[1]); uvs.push(q[0], q[1]); });
+    tri.forEach(t => {
+      const a = pts[t[0]], b = pts[t[1]], c = pts[t[2]], cr = (b[1] - a[1]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[1] - a[1]);
+      idx.push(...(((cr > 0) === (dir > 0)) ? [t[0], t[1], t[2]] : [t[0], t[2], t[1]]));
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.setIndex(idx);
+    return g;
+  }
+
   function clearRoot() {
     while (root.children.length) { const o = root.children[0]; root.remove(o); o.traverse(n => { if (n.geometry) n.geometry.dispose(); }); }
     cache.forEach(m => m.dispose()); cache.clear();
@@ -70,15 +83,97 @@
   const TOK = { wh: '#f4f2ee', bk: '#2a2a2c', ch: '#c9ccd0', gl: '#9ecbf0', dw: '#6f5a44' };
   function shade(col, k) { const c = new THREE.Color(col); if (k < 1) c.multiplyScalar(k); else c.lerp(new THREE.Color('#ffffff'), k - 1); return '#' + c.getHexString(); }
   const pcol = (t, main) => t === 'm' ? main : t === 'd' ? shade(main, .72) : t === 'l' ? shade(main, 1.35) : (TOK[t] || t);
+
+  // ---------- отделка мебели: блеск и текстура ----------
+  const STY = {
+    matte:   { sh: 6,   sp: '#1a1a1a' },
+    gloss:   { sh: 70,  sp: '#777777' },
+    plastic: { sh: 40,  sp: '#444444' },
+    chrome:  { sh: 110, sp: '#dddddd' },
+    glass:   { sh: 140, sp: '#ffffff' },
+    wood:    { sh: 24,  sp: '#3a3a3a', tex: 'wood', ts: .6 },
+    fabric:  { sh: 3,   sp: '#0d0d0d', tex: 'fabric', ts: .2 },
+    leather: { sh: 38,  sp: '#555555', tex: 'leather', ts: .5 }
+  };
+  Object.keys(STY).forEach(k => { STY[k].id = k; });
+  const TSTY = { ch: 'chrome', gl: 'glass', bk: 'plastic', wh: 'gloss', dw: 'wood' };   // цветовые токены деталей → отделка
+  const DEF_FIN = {};
+  [['wood', 'nightstand wardrobe dresser table dining roundtable oval desk desk_pc chair shelf tvstand shoe_rack hanger wall_shelf mirror_full mirror mirror_round'],
+   ['fabric', 'bed bed1 sofa sofa_l armchair pouf office_chair curtain rug rug_round'],
+   ['leather', 'barstool'],
+   ['plastic', 'counter drawer_base sink wall_cab wall_cab2 tall_cab'],
+   ['gloss', 'fridge fridge_sbs stove washer dishwasher oven microwave hood bath toilet basin shower shower_cabin shower_tile ac tv tv_desk worktop backsplash towel_rail radiator trash robot_vac']]
+    .forEach(a => a[1].split(' ').forEach(k => { DEF_FIN[k] = a[0]; }));
+  const finOf = m => (m.finish && m.finish !== 'auto' && STY[m.finish]) ? m.finish : (DEF_FIN[m.kind] || 'matte');
+
+  const tcache = new Map();
+  function stex(kind, color) {                       // маленькая процедурная текстура (ткань / дерево / кожа), окрашенная в цвет
+    const key = kind + color; let t = tcache.get(key); if (t) return t;
+    const S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S; const g = cv.getContext('2d');
+    let s = 7919; const R = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    g.fillStyle = color; g.fillRect(0, 0, S, S);
+    const dk = shade(color, .62), lt = shade(color, 1.25);
+    if (kind === 'wood') {
+      for (let i = 0; i < 46; i++) {
+        const y0 = R() * S, k = 1 + Math.floor(R() * 3), ph = R() * 6.28, am = 1 + R() * 3;
+        g.globalAlpha = .08 + R() * .18; g.strokeStyle = R() < .75 ? dk : lt; g.lineWidth = .5 + R() * 1.6; g.beginPath();
+        for (let x = 0; x <= S; x += 4) { const y = y0 + am * Math.sin(ph + k * 6.2832 * x / S); x ? g.lineTo(x, y) : g.moveTo(x, y); }
+        g.stroke();
+      }
+    } else if (kind === 'fabric') {
+      g.globalAlpha = .07; g.fillStyle = '#000'; for (let i = 0; i < S; i += 2) { g.fillRect(0, i, S, 1); g.fillRect(i, 0, 1, S); }
+      for (let i = 0; i < 2600; i++) { g.globalAlpha = .1 + R() * .2; g.fillStyle = R() < .5 ? dk : lt; g.fillRect(R() * S, R() * S, 1, 1); }
+    } else {
+      for (let i = 0; i < 700; i++) { g.globalAlpha = .05 + R() * .08; g.fillStyle = R() < .5 ? dk : lt; g.beginPath(); g.arc(R() * S, R() * S, 1 + R() * 3, 0, 6.2832); g.fill(); }
+      g.globalAlpha = .12; g.fillStyle = dk; for (let i = 0; i < 1500; i++) g.fillRect(R() * S, R() * S, 1, 1);
+    }
+    g.globalAlpha = 1;
+    t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / STY[kind].ts, 1 / STY[kind].ts); t.anisotropy = 4;
+    tcache.set(key, t); if (tcache.size > 120) { const k = tcache.keys().next().value; tcache.get(k).dispose(); tcache.delete(k); }
+    return t;
+  }
+  const pmcache = new Map();
+  function pmat(col, st, o) {
+    const k = col + '|' + st.id + '|' + (o ? JSON.stringify(o) : ''); let m = pmcache.get(k);
+    if (!m) {
+      const q = Object.assign({ color: new THREE.Color(st.tex ? '#ffffff' : col), shininess: st.sh, specular: new THREE.Color(st.sp) }, o || {});
+      if (st.tex) q.map = stex(st.tex, col);
+      m = new THREE.MeshPhongMaterial(q); pmcache.set(k, m);
+    }
+    return m;
+  }
+  // параллелепипед со скруглёнными рёбрами (r — радиус); UV в метрах, чтобы текстура имела реальный масштаб
+  const rgcache = new Map();
+  function rgeo(w, h, d, r) {
+    r = Math.max(.0005, Math.min(r, Math.min(w, h, d) * .45));
+    const key = [w, h, d, r].map(v => v.toFixed(4)).join('|'); let g = rgcache.get(key); if (g) return g;
+    g = new THREE.BoxGeometry(w, h, d, 4, 4, 4);
+    const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv, hw = w / 2, hh = h / 2, hd = d / 2;
+    const mp = (p, hs) => [-hs, -(hs - r), 0, hs - r, hs][Math.round((p / hs + 1) * 2)];
+    const cp = (p, hs) => Math.max(-(hs - r), Math.min(hs - r, p));
+    for (let i = 0; i < P.count; i++) {
+      const x = mp(P.getX(i), hw), y = mp(P.getY(i), hh), z = mp(P.getZ(i), hd), f = Math.floor(i / 25);
+      U.setXY(i, f < 2 ? z + hd : x + hw, f < 2 ? y + hh : f < 4 ? z + hd : y + hh);
+      const cx = cp(x, hw), cy = cp(y, hh), cz = cp(z, hd), dx = x - cx, dy = y - cy, dz = z - cz, L = Math.hypot(dx, dy, dz) || 1;
+      P.setXYZ(i, cx + dx / L * r, cy + dy / L * r, cz + dz / L * r); N.setXYZ(i, dx / L, dy / L, dz / L);
+    }
+    rgcache.set(key, g); return g;
+  }
+
   function buildModel(m, M) {
-    const g = new THREE.Group(), main = m.color || '#bbb';
+    const g = new THREE.Group(), main = m.color || '#bbb', acc = m.color2 || TOK.dw, fin = finOf(m), on = m.on !== false, soft = fin === 'fabric' || fin === 'leather';
     M.parts.forEach(p => {
-      const col = pcol(p.c || 'm', main), o = {}; let mesh, h;
+      const t = p.c || 'm', isMain = t === 'm' || t === 'd' || t === 'l', col = t === 'dw' ? acc : pcol(t, main);
+      const st = STY[isMain ? fin : (TSTY[t] || 'gloss')], o = {}; let mesh, h;
       if (p.op) { o.transparent = true; o.opacity = p.op; o.depthWrite = false; }
-      if (p.em && opt.night) o.emissive = new THREE.Color(col);          // светится только в режиме «вечер»
-      if (p.b) { mesh = new THREE.Mesh(bgeo(p.b[0], p.b[1], p.b[2]), mat(col, o)); h = p.b[1]; }
-      else if (p.y) { mesh = new THREE.Mesh(new THREE.CylinderGeometry(p.y[0], p.y[2], p.y[1], 22), mat(col, o)); h = p.y[1]; }
-      else { mesh = new THREE.Mesh(new THREE.SphereGeometry(p.s[0], 16, 12), mat(col, o)); h = p.s[0] * 2; }
+      if (p.em && opt.night && on) o.emissive = new THREE.Color(col);          // светится только вечером и только если лампа включена
+      const mt = pmat(col, st, o);
+      if (p.b) {
+        const mn = Math.min(p.b[0], p.b[1], p.b[2]), mx = Math.max(p.b[0], p.b[1], p.b[2]);
+        mesh = new THREE.Mesh(mx < .12 ? bgeo(p.b[0], p.b[1], p.b[2]) : rgeo(p.b[0], p.b[1], p.b[2], isMain && soft ? Math.min(.045, mn * .38) : Math.min(.012, mn * .3)), mt); h = p.b[1];
+      }
+      else if (p.y) { mesh = new THREE.Mesh(new THREE.CylinderGeometry(p.y[0], p.y[2], p.y[1], 22), mt); h = p.y[1]; }
+      else { mesh = new THREE.Mesh(new THREE.SphereGeometry(p.s[0], 16, 12), mt); h = p.s[0] * 2; }
       mesh.position.set(p.at[0], p.rot ? p.at[1] : p.at[1] + h / 2, p.at[2]);   // у повёрнутых деталей at = центр
       if (p.rot) mesh.rotation.set(p.rot[0] * Math.PI / 180, p.rot[1] * Math.PI / 180, p.rot[2] * Math.PI / 180);
       if (p.k) mesh.scale.set(p.k[0], p.k[1], p.k[2]);
@@ -132,16 +227,34 @@
     hemi.intensity = opt.night ? .12 : .55; sun.intensity = opt.night ? .1 : .85; scene.background.set(opt.night ? '#1a2030' : '#e3e8ee');
     const f = FP.floor(), st = FP.data.settings, walls = FP.getWalls(f), walking = isWalk();
     const wm = (walking && opt.walls !== 'glass') ? 'full' : opt.walls, cutH = wm === 'cut' ? opt.cut : undefined;
+
     // пол, потолок
     f.rooms.forEach(r => {
+      if (r.poly) {                                      // многоугольная комната: пол и потолок по контуру
+        const fs = FP.floorSpec(r), frot = r.floorRot === 90;
+        const mf = new THREE.Mesh(flatGeo(r.poly, 0, 1, (X, Z) => frot ? [Z, X] : [X, Z]), fmat(fs, false)); mf.receiveShadow = true; root.add(mf);
+        if (walking && opt.ceil) root.add(new THREE.Mesh(flatGeo(r.poly, f.height, -1, (X, Z) => [X, Z]), FP.ceilSpec ? fmat(FP.ceilSpec(r), false) : mat('#fbfaf7')));
+        return;
+      }
 
       const fs = FP.floorSpec(r), fcol = FP.MAT.eff(fs), frot = r.floorRot === 90;
       const fl = new THREE.Mesh(new THREE.BoxGeometry(r.width, .04, r.depth), [mat(fcol), mat(fcol), fmat(fs, false), mat(fcol), mat(fcol), mat(fcol)]);
       uvFace(fl.geometry, 2, (u, v) => { const X = r.x + u * r.width, Z = r.y + (1 - v) * r.depth; return frot ? [Z, X] : [X, Z]; });   // мировые координаты: рисунок продолжается между комнатами
       fl.position.set(r.x + r.width / 2, -.02, r.y + r.depth / 2); fl.receiveShadow = true; root.add(fl);
 
-      if (walking && opt.ceil) { const cm = new THREE.Mesh(new THREE.PlaneGeometry(r.width, r.depth), mat('#fbfaf7')); cm.rotation.x = Math.PI / 2; cm.position.set(r.x + r.width / 2, f.height, r.y + r.depth / 2); root.add(cm); }
+      if (walking && opt.ceil) {
+        const cm = new THREE.Mesh(new THREE.PlaneGeometry(r.width, r.depth), fmat(FP.ceilSpec(r), false));
+        const ua = cm.geometry.attributes.uv; for (let i = 0; i < 4; i++) ua.setXY(i, r.x + ua.getX(i) * r.width, r.y + ua.getY(i) * r.depth);   // текстура в метрах
+        cm.rotation.x = Math.PI / 2; cm.position.set(r.x + r.width / 2, f.height, r.y + r.depth / 2); root.add(cm);
+      }
     });
+
+    // объединённые комнаты: пол на месте убранной стены
+    FP.mergeInfo(f, walls).bridges.forEach(b => {
+      const fs = FP.floorSpec(b.room), frot = b.room.floorRot === 90;
+      const mb = new THREE.Mesh(flatGeo(b.pts, 0, 1, (X, Z) => frot ? [Z, X] : [X, Z]), fmat(fs, false)); mb.receiveShadow = true; root.add(mb);
+    });
+
     // стены
     walls.forEach(w => {
       const L = FP.wlen(w); if (L < .01) return;
@@ -186,8 +299,9 @@
       const M = FP.model(m), g = M ? buildModel(m, M) : buildFurn(m);      // нет модели в библиотеке: старая процедурная форма
       const yb = M ? (M.ceil ? f.height - m.height : (m.elev != null ? m.elev : (M.elev || 0))) : 0;
       g.position.set(m.x, yb, m.y); g.rotation.y = -(m.rotation || 0) * Math.PI / 180; if (m.flipX) g.scale.x *= -1; root.add(g);
-      if (opt.night && M && M.light && lamps < 14) {
-        lamps++; const L = M.light, pl = new THREE.PointLight(L.c, L.i, L.d); pl.position.set(m.x, yb + (L.y || 0) * m.height / M.h, m.y); root.add(pl);
+      g.userData.fid = m.id;
+      if (opt.night && M && M.light && m.on !== false && lamps < 14) {
+        lamps++; const L = M.light, pl = new THREE.PointLight(L.c, L.i * opt.lamp, L.d); pl.position.set(m.x, yb + (L.y || 0) * m.height / M.h, m.y); root.add(pl);
       }
     });
     // свет/тени под размер плана
@@ -216,6 +330,7 @@
       walk.x = q.cx + q.ux * nl - q.uy * nly; walk.z = q.cy + q.uy * nl + q.ux * nly;
     });
   }
+  // автообход
   function updateWalk(dt) {
     const run = keys.ShiftLeft || keys.ShiftRight, sp = (run ? 3.4 : 1.6) * dt;
     const fwd = ((keys.KeyW || keys.ArrowUp) ? 1 : 0) - ((keys.KeyS || keys.ArrowDown) ? 1 : 0);
@@ -226,7 +341,7 @@
     if (fwd || str) collide();
     if (tour) {
       tour.t += dt; walk.yaw += .3 * dt;
-      if (tour.t > 5) { tour.t = 0; const rs = FP.floor().rooms; if (rs.length) { tour.i = (tour.i + 1) % rs.length; V3.walkAt(rs[tour.i].x + rs[tour.i].width / 2, rs[tour.i].y + rs[tour.i].depth / 2, true); } }
+      if (tour.t > 5) { tour.t = 0; const rs = FP.floor().rooms; if (rs.length) { tour.i = (tour.i + 1) % rs.length; V3.walkAt(...FP.roomCenter(rs[tour.i]), true); } }
     }
   }
   V3.walkAt = function (x, y, keepTour) {
@@ -273,8 +388,24 @@
     new ResizeObserver(resize).observe(host);
     const cvs = renderer.domElement; let pd = null; cvs.tabIndex = 0;
     cvs.addEventListener('contextmenu', e => e.preventDefault());
-    cvs.addEventListener('pointerdown', e => { cvs.focus(); cvs.setPointerCapture(e.pointerId); pd = { x: e.clientX, y: e.clientY, btn: e.button, shift: e.shiftKey }; });
-    cvs.addEventListener('pointerup', () => { pd = null; });
+
+    cvs.addEventListener('pointerdown', e => { cvs.focus(); cvs.setPointerCapture(e.pointerId); pd = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, btn: e.button, shift: e.shiftKey }; });
+    cvs.addEventListener('pointerup', e => { if (pd && pd.btn === 0 && Math.hypot(e.clientX - pd.sx, e.clientY - pd.sy) < 4) pickLamp(e); pd = null; });
+    // клик (без перетаскивания) по лампе / экрану / подсветке: вкл-выкл
+    const ray = new THREE.Raycaster(), mv = new THREE.Vector2(); ray.params.Line.threshold = 0.01;
+    function pickLamp(e) {
+      const rc = cvs.getBoundingClientRect();
+      mv.set(((e.clientX - rc.left) / rc.width) * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1); ray.setFromCamera(mv, camera);
+      const hit = ray.intersectObjects(root.children, true)[0]; if (!hit) return;
+      let o = hit.object; while (o && !(o.userData && o.userData.fid)) o = o.parent;
+      if (!o) return;
+      const m = FP.floor().furniture.find(q => q.id === o.userData.fid);
+      if (!m || !FP.isLamp(FP.model(m))) return;
+      const nowOn = m.on === false; FP.snap(); m.on = nowOn;
+      if (nowOn && !opt.night) { opt.night = true; FP.$('o3night').checked = true; }
+      FP.changed();
+    }
+
     cvs.addEventListener('pointermove', e => {
       if (!pd) return; const dx = e.clientX - pd.x, dy = e.clientY - pd.y; pd.x = e.clientX; pd.y = e.clientY;
       if (isWalk()) { walk.yaw += dx * .005; walk.pitch = clamp(walk.pitch - dy * .004, -1.3, 1.3); }
@@ -310,18 +441,27 @@
     FP.$('o3cut').oninput = e => { opt.cut = +e.target.value; if (opt.walls !== 'cut') { opt.walls = 'cut'; FP.$('o3walls').value = 'cut'; } needs = true; updateHelp(); };
     FP.$('o3ceil').onchange = e => { opt.ceil = e.target.checked; needs = true; };
     FP.$('o3night').onchange = e => { opt.night = e.target.checked; needs = true; };
+
+    FP.$('o3lamp').oninput = e => { opt.lamp = +e.target.value; needs = true; };
+    const lampsAll = on => {
+      FP.snap(); FP.floor().furniture.forEach(m => { if (FP.isLamp(FP.model(m))) m.on = on; });
+      if (on && !opt.night) { opt.night = true; FP.$('o3night').checked = true; }
+      FP.changed();
+    };
+    FP.$('o3lampsOn').onclick = () => lampsAll(true); FP.$('o3lampsOff').onclick = () => lampsAll(false);
+
     FP.$('o3cam').onchange = e => {
       const prev = opt.cam; opt.cam = e.target.value;
       if (opt.cam === 'top') { orbit.pitch = 1.55; orbit.yaw = 0; }
       if (opt.cam === 'orbit' && prev === 'top') { orbit.pitch = .75; orbit.yaw = .6; }
-      if (opt.cam === 'walk') { const r = FP.floor().rooms.find(r => r.id === FP.$('o3room').value) || FP.floor().rooms[0]; if (r) { walk.x = r.x + r.width / 2; walk.z = r.y + r.depth / 2; } }
+      if (opt.cam === 'walk') { const r = FP.floor().rooms.find(r => r.id === FP.$('o3room').value) || FP.floor().rooms[0]; if (r) { const c0 = FP.roomCenter(r); walk.x = c0[0]; walk.z = c0[1]; } }
       if (opt.cam !== 'walk') { tour = null; FP.$('o3tour').classList.remove('on'); }
       needs = true; updateHelp();
     };
-    FP.$('o3go').onclick = () => { const r = FP.floor().rooms.find(r => r.id === FP.$('o3room').value); if (r) V3.walkAt(r.x + r.width / 2, r.y + r.depth / 2); };
+    FP.$('o3go').onclick = () => { const r = FP.floor().rooms.find(r => r.id === FP.$('o3room').value); if (r) V3.walkAt(...FP.roomCenter(r)) };
     FP.$('o3tour').onclick = () => {
       if (tour) { tour = null; FP.$('o3tour').classList.remove('on'); return; }
-      const rs = FP.floor().rooms; if (!rs.length) return; tour = { i: 0, t: 0 }; FP.$('o3tour').classList.add('on'); V3.walkAt(rs[0].x + rs[0].width / 2, rs[0].y + rs[0].depth / 2, true);
+      const rs = FP.floor().rooms; if (!rs.length) return; tour = { i: 0, t: 0 }; FP.$('o3tour').classList.add('on'); V3.walkAt(...FP.roomCenter(rs[0]), true);
     };
     FP.$('o3fit').onclick = () => { V3.fit(); };
     FP.$('o3op').oninput = e => {
