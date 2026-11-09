@@ -1,6 +1,6 @@
 (function () {
   const $ = FP.$, { el, row, edit } = FP.uiForm;
-  const CATS = { floor: ['Ламинат', 'Паркет', 'Плитка', 'Прочее'], wall: ['Краска', 'Штукатурка', 'Обои', 'Кирпич, рейки, бетон', 'Плитка'] };
+  const CATS = { floor: ['Ламинат', 'Паркет', 'Плитка', 'Прочее'], wall: ['Краска', 'Штукатурка', 'Обои', 'Кирпич, рейки, бетон', 'Плитка'], door: ['Двери'] };
   const thumbs = new Map(), urls = new Map();
   let cur = null, cb = null, useK = 'wall', tab = null, token = 0;
 

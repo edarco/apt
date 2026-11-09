@@ -1,6 +1,11 @@
 (function () {
   const cv = FP.$('c2d'), c = cv.getContext('2d');
   const V = FP.v2 = { s: 60, ox: 120, oy: 90, tool: 'select' };
+
+  const LIGHT = { bg: '#faf8f4', g1: '#ddd7ca', g2: '#eee9df', wall: '#2f2f33', lblBg: 'rgba(255,255,255,.88)', lblTx: '#222', room1: '#333', room2: '#555', door: '#555' };
+  const DARK  = { bg: '#3E3838', g1: '#5f636f', g2: '#555965', wall: '#010101', lblBg: 'rgba(37,38,43,.92)', lblTx: '#eee', room1: '#eee', room2: '#bbb', door: '#b8b6b6' };
+  let C = LIGHT; const theme = () => { const m = V.canvasTheme || 'auto'; return (m === 'dark' || (m === 'auto' && document.documentElement.dataset.theme === 'dark')) ? DARK : LIGHT; };
+
   let W = 1, H = 1, dpr = 1, drag = null, tmp = null, hover = null, meas = null, space = false, rafP = 0;
   const sx = x => V.ox + x * V.s, sy = y => V.oy + y * V.s, wx = p => (p - V.ox) / V.s, wy = p => (p - V.oy) / V.s;
   const set = () => FP.data.settings;
@@ -88,22 +93,26 @@
   // ---------- рисование ----------
   function lbl(text, px, py, rot) {
     c.save(); c.translate(px, py); if (rot) c.rotate(rot); c.font = '11px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    const w = c.measureText(text).width + 8; c.fillStyle = 'rgba(255,255,255,.88)'; c.fillRect(-w / 2, -8, w, 16); c.fillStyle = '#222'; c.fillText(text, 0, 0); c.restore();
+    const w = c.measureText(text).width + 8; c.fillStyle = C.lblBg; c.fillRect(-w / 2, -8, w, 16); c.fillStyle = C.lblTx; c.fillText(text, 0, 0); c.restore();
   }
   function drawOpening(w, o, alpha) {
     const p = FP.openPos(w, o), s = V.s, len = o.width * s, ht = Math.max(w.t * s / 2, 2) + 1.5;
     c.save(); c.globalAlpha = alpha || 1; c.translate(sx(p.sx), sy(p.sy)); c.rotate(Math.atan2(p.uy, p.ux));
-    c.fillStyle = '#faf8f4'; c.fillRect(0, -ht, len, 2 * ht);
+    c.fillStyle = C.bg; c.fillRect(0, -ht, len, 2 * ht);
     if (o.kind === 'window') {
       c.strokeStyle = '#2f78d0'; c.lineWidth = 1.5; c.strokeRect(0, -ht * .55, len, ht * 1.1);
       c.beginPath(); c.moveTo(0, 0); c.lineTo(len, 0); c.stroke();
     } else if (o.kind === 'gap') {            // проём без двери: пунктир по краям
       c.strokeStyle = '#888'; c.lineWidth = 1; c.setLineDash([4, 3]);
       c.beginPath(); c.moveTo(0, -ht); c.lineTo(0, ht); c.moveTo(len, -ht); c.lineTo(len, ht); c.stroke(); c.setLineDash([]);
-    } else {
+    } else { // дверь
       const perp = p.nx * (-p.uy) + p.ny * p.ux, ly = (perp >= 0 ? 1 : -1) * (o.swing === -1 ? -1 : 1);
       const hx = o.flip ? len : 0, a1 = o.flip ? Math.PI : 0, d = o.flip ? -ly : ly, a2 = a1 + d * Math.PI / 2;
-      c.strokeStyle = '#555'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(hx, 0); c.lineTo(hx, ly * len); c.stroke();
+
+      c.strokeStyle = C.door; c.lineWidth = 1.5; c.beginPath(); c.moveTo(hx, 0);
+      if (o.open) c.lineTo(hx, ly * len); else c.lineTo(o.flip ? 0 : len, 0);      // открытая: полотно под 90°, закрытая: вдоль стены
+      c.stroke();
+
       c.lineWidth = 1; c.setLineDash([3, 3]); c.beginPath(); c.arc(hx, 0, len, a1, a2, d < 0); c.stroke(); c.setLineDash([]);
     }
     c.restore();
@@ -169,37 +178,55 @@
     FP.fixPoly(r); f.rooms.push(r); tmp = null; V.setTool('select'); FP.select('room', r.id); FP.changed();
   }
 
+  const patC = new Map();
+  function floorPat(spec) {
+    const P = FP.MAT.get(spec.m); if (!P.tex) return null;
+    const k = P.id + '|' + (spec.c || P.c); let e = patC.get(k);
+    if (!e) { const r = FP.MAT.canvasFor(P, spec.c || null, 256); e = { pat: c.createPattern(r.cv, 'repeat'), tw: r.tw, th: r.th }; patC.set(k, e); }
+    return e;
+  }
+
   V.draw = function () {
     if (!FP.data) return;
-    c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = '#faf8f4'; c.fillRect(0, 0, W, H);
+    C = theme(); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
     const f = FP.floor(), s = V.s, walls = FP.getWalls(f), sel = FP.sel, so = FP.selObj();
     const MI = FP.mergeInfo(f, walls), MA = FP.mergeAreas(f, walls), GC = {};
     f.rooms.forEach(q => { if (q.merge) GC[q.merge] = (GC[q.merge] || 0) + 1; });
     const step = s >= 90 ? .25 : s >= 35 ? .5 : 1; c.lineWidth = 1;
-    for (let x = Math.floor(wx(0) / step) * step; x <= wx(W); x += step) { c.strokeStyle = Math.abs(x - Math.round(x)) < 1e-6 ? '#ddd7ca' : '#eee9df'; c.beginPath(); c.moveTo(Math.round(sx(x)) + .5, 0); c.lineTo(Math.round(sx(x)) + .5, H); c.stroke(); }
-    for (let y = Math.floor(wy(0) / step) * step; y <= wy(H); y += step) { c.strokeStyle = Math.abs(y - Math.round(y)) < 1e-6 ? '#ddd7ca' : '#eee9df'; c.beginPath(); c.moveTo(0, Math.round(sy(y)) + .5); c.lineTo(W, Math.round(sy(y)) + .5); c.stroke(); }
+    for (let x = Math.floor(wx(0) / step) * step; x <= wx(W); x += step) { c.strokeStyle = Math.abs(x - Math.round(x)) < 1e-6 ? C.g1 : C.g2; c.beginPath(); c.moveTo(Math.round(sx(x)) + .5, 0); c.lineTo(Math.round(sx(x)) + .5, H); c.stroke(); }
+    for (let y = Math.floor(wy(0) / step) * step; y <= wy(H); y += step) { c.strokeStyle = Math.abs(y - Math.round(y)) < 1e-6 ? C.g1 : C.g2; c.beginPath(); c.moveTo(0, Math.round(sy(y)) + .5); c.lineTo(W, Math.round(sy(y)) + .5); c.stroke(); }
 
-    f.rooms.forEach(r => { c.fillStyle = r.color; if (r.poly) { polyPath(r.poly); c.fill(); } else c.fillRect(sx(r.x), sy(r.y), r.width * s, r.depth * s); });
+    f.rooms.forEach(r => {
+      const fill = () => { if (r.poly) { polyPath(r.poly); c.fill(); } else c.fillRect(sx(r.x), sy(r.y), r.width * s, r.depth * s); };
+      c.fillStyle = r.color; fill();
+      if (set().planTex) {                                  // текстура пола на плане
+        const e = floorPat(FP.floorSpec(r));
+        if (e) { const kx = e.tw * s / 256, ky = e.th * s / 256; e.pat.setTransform(new DOMMatrix(r.floorRot === 90 ? [0, kx, ky, 0, V.ox, V.oy] : [kx, 0, 0, ky, V.ox, V.oy])); c.fillStyle = e.pat; fill(); }
+      }
+    });
+
     MI.bridges.forEach(b => { c.fillStyle = c.strokeStyle = b.room.color; c.lineWidth = 1.5; polyPath(b.pts); c.fill(); c.stroke(); });   // пол на месте убранной стены
 
     f.rooms.forEach(r => {
-      c.fillStyle = '#333'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillStyle = C.room1; c.textAlign = 'center'; c.textBaseline = 'middle';
       let px, py, lw;
       if (r.poly) { const q = FP.labelPos(r); px = sx(q.x); py = sy(q.y) - 8; lw = q.w; } else { px = sx(r.x + r.width / 2); py = sy(r.y) + 16; lw = r.width; }
       if (lw * s > 60) {
         c.font = 'bold 12px system-ui'; c.fillText(r.name, px, py);
-        c.font = '11px system-ui'; c.fillStyle = '#555'; c.fillText(FP.roomArea(r).toFixed(2) + ' м²', px, py + 15);
+        c.font = '11px system-ui'; c.fillStyle = C.room2; c.fillText(FP.roomArea(r).toFixed(2) + ' м²', px, py + 15);
         if (r.merge && GC[r.merge] > 1 && MA[r.merge] != null) { c.fillStyle = '#b5400f'; c.fillText('Σ ' + MA[r.merge].toFixed(2) + ' м²', px, py + 30); }   // площадь объединённой зоны
       }
     });
 
     walls.forEach(w => {
-      const L = FP.wlen(w), a = Math.atan2(w.y2 - w.y1, w.x2 - w.x1), th = Math.max(1.5, w.t * s);
-      c.save(); c.translate(sx(w.x1), sy(w.y1)); c.rotate(a); c.fillStyle = '#2f2f33';
+      const L = FP.wlen(w), a = Math.atan2(w.y2 - w.y1, w.x2 - w.x1), th = w.rail ? Math.max(2, .05 * s) : Math.max(1.5, w.t * s);
+      c.save(); c.translate(sx(w.x1), sy(w.y1)); c.rotate(a); c.fillStyle = w.rail ? '#6f8aa3' : C.wall;
       const segs = [], ms = MI.spans.get(w.id) || []; let cur = -w.e1;
       ms.forEach(q => { if (q[0] > .0005 && q[0] > cur) segs.push([cur, q[0]]); cur = Math.max(cur, q[1]); });
       if (cur < L - .0005) segs.push([cur, L + w.e2]);
-      segs.forEach(q => c.fillRect(q[0] * s, -th / 2, (q[1] - q[0]) * s, th)); c.restore();
+      segs.forEach(q => c.fillRect(q[0] * s, -th / 2, (q[1] - q[0]) * s, th));
+      if (w.rail) { c.fillStyle = '#4d6377'; const nn = Math.max(1, Math.round(L)); for (let i = 0; i <= nn; i++) c.fillRect(L * i / nn * s - 2, -4, 4, 8); }
+      c.restore();
     });
 
     f.openings.forEach(o => { const w = walls.find(q => q.id === o.wallId); if (w) drawOpening(w, o); });
@@ -297,6 +324,25 @@
   const schedProps = () => { if (rafP) return; rafP = requestAnimationFrame(() => { rafP = 0; FP.ui && FP.ui.props(); }); };
 
   cv.addEventListener('contextmenu', e => e.preventDefault());
+
+  const ptrs = new Map(); let pinch = null;
+  const pinchSt = () => { const a = [...ptrs.values()], r = cv.getBoundingClientRect(); return { d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1, cx: (a[0].x + a[1].x) / 2 - r.left, cy: (a[0].y + a[1].y) / 2 - r.top }; };
+  cv.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size >= 2) { drag = null; tmp = null; if (ptrs.size === 2) pinch = Object.assign(pinchSt(), { s: V.s, ox: V.ox, oy: V.oy }); e.stopImmediatePropagation(); }
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && ptrs.size >= 2) {                        // щипок: масштаб + сдвиг двумя пальцами
+      const now = pinchSt(), ns = Math.max(8, Math.min(400, pinch.s * now.d / pinch.d)), wx0 = (pinch.cx - pinch.ox) / pinch.s, wy0 = (pinch.cy - pinch.oy) / pinch.s;
+      V.s = ns; V.ox = now.cx - wx0 * ns; V.oy = now.cy - wy0 * ns; V.draw(); e.stopImmediatePropagation();
+    }
+  });
+  const ptrEnd = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; };
+  cv.addEventListener('pointerup', ptrEnd); cv.addEventListener('pointercancel', ptrEnd);
+
   cv.addEventListener('pointerdown', e => {
     cv.setPointerCapture(e.pointerId); const p = P(e), x = wx(p.x), y = wy(p.y); V.mx = x; V.my = y;
     if (e.button === 1 || e.button === 2 || V.tool === 'pan' || space) { drag = { mode: 'pan', px: p.x, py: p.y, ox: V.ox, oy: V.oy }; cv.style.cursor = 'grabbing'; return; }
@@ -383,7 +429,7 @@
         } else if (drag.type === 'furniture') { o.x = snv(drag.o.x + dx, e); o.y = snv(drag.o.y + dy, e); if (!e.altKey) FP.wallSnap(o); }
         else if (drag.type === 'opening') {
           const w = FP.getWalls(f).find(q => q.id === o.wallId);
-          if (w) { const L = FP.wlen(w), ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, pr = (x - w.x1) * ux + (y - w.y1) * uy; o.o.offset = Math.max(0, Math.min(L - o.width, snv(pr - o.width / 2, e))); delete o.k; }
+          if (w) { const L = FP.wlen(w), ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, pr = (x - w.x1) * ux + (y - w.y1) * uy; o.offset = Math.max(0, Math.min(L - o.width, snv(pr - o.width / 2, e))); delete o.k; }
         }
       } else if (drag.mode === 'corner') {
         const od = drag.o, fx = drag.c.includes('l') ? od.x + od.width : od.x, fy = drag.c.includes('t') ? od.y + od.depth : od.y;
@@ -408,7 +454,7 @@
     else if (V.tool === 'door' || V.tool === 'window' || V.tool === 'gap') {
       const walls = FP.getWalls(FP.floor()); let best = null, bd = 16 / V.s;
       walls.forEach(w => { const r = segProj(x, y, w); if (r.d < bd) { bd = r.d; best = { w, t: r.t }; } });
-      if (best) { const d = FP.opDefaults(V.tool), L = FP.wlen(best.w), wd = Math.min(d.width, L); hover = { w: best.w, o: { offset: Math.max(0, Math.min(L - wd, snv(best.t - wd / 2, e))), width: wd, kind: V.tool, flip: false, swing: 1 } }; } else hover = null;
+      if (best) { const d = FP.opDefaults(V.tool), L = FP.wlen(best.w), wd = Math.min(d.width, L); hover = { w: best.w, o: { offset: Math.max(0, Math.min(L - wd, snv(best.t - wd / 2, e))), width: wd, kind: V.tool, flip: false, swing: 1, open: true } }; } else hover = null;
     }
     V.draw();
   });

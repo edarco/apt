@@ -92,7 +92,7 @@
     };
     D.forEach((d, i) => {
       const pv = D[(i + n - 1) % n], nx = D[(i + 1) % n], h = inn ? d.t / 2 : 0;
-      out.push({ id: r.id + ':p' + i, side: 'p' + i, room: r, x1: d.a[0] - d.nx * h, y1: d.a[1] - d.ny * h, x2: d.b[0] - d.nx * h, y2: d.b[1] - d.ny * h, t: d.t, e1: ext(pv.t, pv, d), e2: ext(nx.t, d, nx), nx: d.nx, ny: d.ny, inSign: sg });
+      out.push({ id: r.id + ':p' + i, side: 'p' + i, room: r, x1: d.a[0] - d.nx * h, y1: d.a[1] - d.ny * h, x2: d.b[0] - d.nx * h, y2: d.b[1] - d.ny * h, t: d.t, e1: ext(pv.t, pv, d), e2: ext(nx.t, d, nx), nx: d.nx, ny: d.ny, inSign: sg, rail: !!(r.rail && r.rail['p' + i]) });
     });
   }
   const _gw = FP.getWalls;

@@ -70,3 +70,25 @@ dialog{border:1px solid var(--line);border-radius:10px;padding:14px}
 .matb{flex:1;display:flex;align-items:center;gap:6px;text-align:left;min-width:0}
 .matb span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .msw{width:28px;height:20px;border-radius:4px;border:1px solid rgba(0,0,0,.3);flex:none;background-size:cover;display:inline-block}
+/* панели скрываются / полный экран */
+body.hideL #left{display:none}
+body.hideR #right{display:none}
+#c2d,#c3d{touch-action:none}
+body{height:100dvh}
+dialog{max-width:94vw}
+
+/* адаптив */
+@media (max-width:900px){
+  #main{position:relative}
+  #left,#right{position:absolute;top:0;bottom:0;z-index:5;box-shadow:0 0 14px rgba(0,0,0,.3)}
+  #left{left:0;width:min(78vw,260px)}
+  #right{right:0;width:min(88vw,330px)}
+  #top{flex-wrap:nowrap;overflow-x:auto;gap:4px;padding:4px 6px}
+  #top>*{flex:none}
+  #projName{width:120px}
+  #bar3d{max-height:42%;overflow:auto}
+  button,select,input[type=text],input[type=number]{min-height:34px}
+  #matGrid{width:90vw}
+  .row>span{width:80px}
+}
+@media (pointer:coarse){ #tools kbd,.kbd{display:none} }

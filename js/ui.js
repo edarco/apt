@@ -44,7 +44,10 @@
   FP.ui.buildLeft = buildLeft;
 
   // ---------- запуск ----------
-  FP.listeners.push(noSave => { FP.ui.props(); if (!noSave) FP.ui.refreshTop(); });
+  FP.listeners.push(noSave => {
+    FP.ui.props(); if (!noSave) FP.ui.refreshTop();
+    if (FP.sel && matchMedia('(max-width:900px)').matches) document.body.classList.remove('hideR');   // телефон: выбрал объект, открылись свойства
+  });
   (function boot() {
     let loaded = false;
     try { const s = localStorage.getItem('fp_v1'); if (s) { FP.data = FP.normalize(JSON.parse(s)); loaded = true; } } catch (e) {}

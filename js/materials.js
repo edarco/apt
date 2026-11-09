@@ -46,6 +46,11 @@
     } };
   };
 
+  K.vplank = P => {                                   // доска с вертикальным рисунком (для дверей)
+    const k = K.plank(P);
+    return { tw: k.th, th: k.tw, draw(g, R) { g.transform(0, 1, 1, 0, 0, 0); k.draw(g, R); } };
+  };
+
   K.herring = P => {                                // паркет «ёлочка» (доски n×1, под 90°)
     const n = P.n || 4, Wd = P.bw || .1, S = 2 * n, c = P.c, size = S * Wd;
     return { tw: size, th: size, draw(g) {
@@ -81,7 +86,7 @@
     if (P.chess) cx += cx % 2;
     const tw = cx * a, th = cy * b;
     return { tw, th, draw(g, R) {
-      const gw = P.gw == null ? .003 : P.gw, vr = P.var == null ? .06 : P.var, sd = P.seed || 0;
+      const gw = (P.gw == null ? .003 : P.gw) * 1.5, vr = P.var == null ? .06 : P.var, sd = P.seed || 0;
       g.fillStyle = P.grout || autoGrout(c); g.fillRect(0, 0, tw, th);
       for (let j = 0; j < cy; j++) for (let i = -1; i <= cx; i++) {
         const off = stag && j % 2 ? a * stag : 0, ii = ((i % cx) + cx) % cx;
@@ -108,7 +113,11 @@
           }
           if (P.rough) for (let k = 0; k < P.rough; k++) { g.globalAlpha = .25 * R(); g.fillStyle = R() < .5 ? '#000000' : '#ffffff'; g.fillRect(x0 + R() * w, y0 + R() * h, .004, .004); }
           g.globalAlpha = 1;
-          if (P.gloss) { const gr = g.createLinearGradient(x0, y0, x0 + w, y0 + h); gr.addColorStop(0, 'rgba(255,255,255,.16)'); gr.addColorStop(.5, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(0,0,0,.07)'); g.fillStyle = gr; g.fillRect(x0, y0, w, h); }
+          if (P.gloss) {
+            const e = Math.min(.012, Math.min(w, h) * .15), sh = (hh(ii, j, 9, sd) - .5) * .07;
+            g.fillStyle = 'rgba(0,0,0,.07)'; g.fillRect(x0, y0, w, e); g.fillRect(x0, y0 + h - e, w, e); g.fillRect(x0, y0, e, h); g.fillRect(x0 + w - e, y0, e, h);
+            g.fillStyle = sh > 0 ? 'rgba(255,255,255,' + sh + ')' : 'rgba(0,0,0,' + (-sh) + ')'; g.fillRect(x0, y0, w, h);
+          }
           if (P.bevel) { const t = Math.min(.004, h * .06); g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(x0, y0, w, t); g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x0, y0 + h - t, w, t); }
           g.restore();
         }
@@ -255,6 +264,12 @@
   add(null, 'paint', 'Краска', 'wall', 'paint', '#f2efe9');
   add('Прочее', 'plain', 'Однотонный (свой цвет)', 'floor', 'plain', '#eeeeee');
 
+  [['Дуб светлый', '#d5b283'], ['Дуб натуральный', '#c19a6b'], ['Орех', '#6b4429'], ['Венге', '#3d2b22'], ['Дуб белёный', '#e3d3b5'], ['Дуб серый', '#a59c8f']]
+    .forEach((q, i) => add('Двери', 'door_w' + i, q[0], 'door', 'vplank', q[1], { bw: .1, bl: 1.2, rows: 6, gw: .0008 }));
+  [['Белая', 'white', '#f4f1ea'], ['Слоновая кость', 'ivory', '#e6dcc7'], ['Серая', 'grey', '#a7a8a8'], ['Графит', 'graph', '#4a4e54'], ['Коричневая', 'brown', '#8a6a4a'],
+  ['Чёрная', 'black', '#26272a'], ['Сталь (входная)', 'steel', '#4a4d52'], ['Зелёная', 'green', '#4f6b5a'], ['Синяя', 'blue', '#2f4057']]
+    .forEach(q => add('Двери', 'door_p_' + q[1], q[0], 'door', 'paint', q[2]));
+
   // краска
   [['Белый', '#f5f3ee'], ['Молочный', '#efe9dc'], ['Слоновая кость', '#e9dfc8'], ['Бежевый', '#dccfb6'], ['Песок', '#cdb99a'], ['Грейдж', '#bfb5a6'], ['Светло-серый', '#d4d4d2'], ['Серый', '#a7a8a8'], ['Графит', '#5c5f64'], ['Чёрный', '#26272a'],
     ['Шалфей', '#b7c2a6'], ['Оливка', '#8a9068'], ['Эвкалипт', '#9fb5a8'], ['Мята', '#cfe3d6'], ['Небо', '#b9d3e3'], ['Пыльный синий', '#8aa1b6'], ['Тёмно-синий', '#2f4057'], ['Бирюза', '#5e9a9a'], ['Терракота', '#c47a5a'], ['Глина', '#b0846a'],
@@ -331,8 +346,8 @@
   const texCache = new Map();
   M.texture = (P, color) => {
     const key = P.id + '|' + (color || P.c); let t = texCache.get(key); if (t) return t;
-    const r = M.canvasFor(P, color, 512);
-    t = new THREE.CanvasTexture(r.cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / r.tw, 1 / r.th); t.anisotropy = 4;
+    const r = M.canvasFor(P, color, (P.k === 'tile' || P.k === 'hex') ? 1024 : 512);
+    t = new THREE.CanvasTexture(r.cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / r.tw, 1 / r.th); t.anisotropy = 8;
     texCache.set(key, t);
     if (texCache.size > 80) { const k = texCache.keys().next().value; texCache.get(k).dispose(); texCache.delete(k); }
     return t;
@@ -341,8 +356,9 @@
   // ---------- выбор отделки для комнат и стен ----------
   const LEG = { oak: 'lam_oak_nat', wood: 'lam_walnut', tile: 'tile_sq30_grey', white: 'plain', concrete: 'cem_grey', carpet: 'carpet_grey' };
   FP.floorSpec = r => r.floor && r.floor.m ? { m: r.floor.m, c: r.floor.c || null } : { m: LEG[r.material] || 'plain', c: r.color };
+  FP.doorSpec = o => o.fin && o.fin.m ? { m: o.fin.m, c: o.fin.c || null } : { m: o.main ? 'door_p_steel' : 'door_p_brown', c: null };
   FP.defWallFin = () => { const s = FP.data.settings; return s.wallFin && s.wallFin.m ? { m: s.wallFin.m, c: s.wallFin.c || null } : { m: 'paint', c: s.wallColor || '#f2efe9' }; };
-  FP.defCeil = () => { const s = FP.data.settings; return s.ceilFin && s.ceilFin.m ? { m: s.ceilFin.m, c: s.ceilFin.c || null } : { m: 'paint', c: '#fbfaf7' }; };
+  FP.defCeil = () => { const s = FP.data.settings; return s.ceilFin && s.ceilFin.m ? { m: s.ceilFin.m, c: s.ceilFin.c || null } : { m: 'paint', c: '#ecebe6' }; };
   FP.ceilSpec = r => r.ceilFin && r.ceilFin.m ? { m: r.ceilFin.m, c: r.ceilFin.c || null } : FP.defCeil();
   FP.zoneNorm = (z, def) => {
     z = z || {}; const up = z.up || def, low = z.low || null;

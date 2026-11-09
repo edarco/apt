@@ -61,7 +61,7 @@
   FP.normalize = function (d) {
     d = d && typeof d === 'object' ? d : {};
     d.version = 1; d.id = d.id || FP.uid(); d.name = d.name || 'Проект'; d.units = 'm';
-    d.settings = Object.assign({ wallColor: '#f2efe9', snap: 0.05, dims: true, moveFurn: true, wallMode: 'inner' }, d.settings || {});
+    d.settings = Object.assign({ wallColor: '#f2efe9', snap: 0.05, dims: true, moveFurn: true, wallMode: 'inner', planTex: false }, d.settings || {});
     if (!Array.isArray(d.floors) || !d.floors.length) d.floors = [FP.newFloor('Этаж 1')];
     d.floors.forEach(f => {
       f.id = f.id || FP.uid(); f.name = f.name || 'Этаж';
@@ -69,7 +69,7 @@
       ['rooms', 'walls', 'openings', 'furniture'].forEach(k => { if (!Array.isArray(f[k])) f[k] = []; });
       f.rooms.forEach(r => { r.id = r.id || FP.uid(); r.name = r.name || 'Комната'; r.x = num(r.x, 0); r.y = num(r.y, 0); r.width = Math.max(.1, num(r.width, 3)); r.depth = Math.max(.1, num(r.depth, 3)); r.material = r.material || 'white'; r.color = r.color || '#eeeeee'; });
       f.walls = f.walls.filter(w => w && isFinite(+w.x1)).map(w => ({ id: w.id || FP.uid(), x1: +w.x1, y1: +w.y1, x2: +w.x2, y2: +w.y2, thickness: num(w.thickness, f.thickness), color: w.color, fin: w.fin }));
-      f.openings.forEach(o => { o.id = o.id || FP.uid(); o.offset = num(o.offset, 0); o.width = num(o.width, 0.9); o.kind = (o.kind === 'window' || o.kind === 'gap') ? o.kind : 'door'; o.flip = !!o.flip; });
+      f.openings.forEach(o => { o.id = o.id || FP.uid(); o.offset = num(o.offset, 0); o.width = num(o.width, 0.9); o.kind = (o.kind === 'window' || o.kind === 'gap') ? o.kind : 'door'; o.flip = !!o.flip; o.open = o.open !== false; });
       f.furniture.forEach(m => { m.id = m.id || FP.uid(); m.kind = m.kind || 'box'; m.name = m.name || m.kind; m.x = num(m.x, 0); m.y = num(m.y, 0); m.width = num(m.width, .5); m.depth = num(m.depth, .5); m.height = num(m.height, .5); m.rotation = num(m.rotation, 0); m.color = m.color || '#bbbbbb'; });
     });
     return d;
@@ -115,6 +115,7 @@
     return +v > 0 ? +v : f.thickness;
   };
   FP.inner = () => FP.data.settings.wallMode !== 'center';
+  FP.hasRail = r => !!r.rail && Object.keys(r.rail).some(k => r.rail[k]);
 
   FP.getWalls = function (f) {
     const out = [], inner = FP.inner();
@@ -133,7 +134,7 @@
         w: [r.x, r.y, r.x, Y2, t.w / 2, t.w / 2],
         e: [X2, r.y, X2, Y2, t.e / 2, t.e / 2]
       };
-      ['n', 's', 'w', 'e'].forEach(k => out.push({ id: r.id + ':' + k, side: k, room: r, x1: d[k][0], y1: d[k][1], x2: d[k][2], y2: d[k][3], t: t[k], e1: d[k][4], e2: d[k][5] }));
+      ['n', 's', 'w', 'e'].forEach(k => out.push({ id: r.id + ':' + k, side: k, room: r, x1: d[k][0], y1: d[k][1], x2: d[k][2], y2: d[k][3], t: t[k], e1: d[k][4], e2: d[k][5], rail: !!(r.rail && r.rail[k]) }));
     });
     f.walls.forEach(w => { const t = w.thickness || f.thickness; out.push({ id: w.id, custom: w, x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2, t, e1: t / 2, e2: t / 2, color: w.color }); });
     // позиция проёма = доля длины стены (o.k, центр проёма): проём следует за стеной при изменении размеров
@@ -244,7 +245,7 @@
     const f = FP.floor(), w = FP.getWalls(f).find(q => q.id === wallId); if (!w) return null;
     const d = FP.opDefaults(kind), L = FP.wlen(w), width = Math.min(d.width, L);
     FP.snap();
-    const o = { id: FP.uid(), wallId, offset: offset == null ? (L - width) / 2 : Math.max(0, Math.min(L - width, offset)), width, kind, flip: false, swing: 1, h: d.h, sill: d.sill };
+    const o = { id: FP.uid(), wallId, offset: offset == null ? (L - width) / 2 : Math.max(0, Math.min(L - width, offset)), width, kind, flip: false, swing: 1, h: d.h, sill: d.sill, open: true };
     f.openings.push(o); FP.select('opening', o.id); FP.changed(); return o;
   };
   FP.addFurniture = function (it) {
@@ -263,6 +264,25 @@
     else f.furniture = f.furniture.filter(x => x !== o);
     FP.sel = null; FP.changed();
   };
+
+  // ---------- двери: открыть/закрыть ----------
+  FP.setDoors = function (list, v) { FP.snap(); list.forEach(o => { o.open = v; }); FP.changed(); };
+  FP.nearestDoor = function (x, y, R) {
+    const f = FP.floor(), ws = FP.getWalls(f); let best = null, bd = R;
+    f.openings.forEach(o => {
+      if (o.kind !== 'door') return; const w = ws.find(q => q.id === o.wallId); if (!w) return;
+      const p = FP.openPos(w, o), d = Math.hypot(p.cx - x, p.cy - y); if (d < bd) { bd = d; best = o; }
+    });
+    return best;
+  };
+  FP.toggleDoorKey = function () {                      // клавиша O
+    const f = FP.floor(), so = FP.selObj(); let o = null;
+    if (so && FP.sel.type === 'opening' && so.kind === 'door') o = so;
+    else { const c = FP.view === '3d' && FP.v3.focus(); if (c) o = FP.nearestDoor(c[0], c[1], 1.8); }
+    if (o) FP.setDoors([o], !o.open);
+    else { const ds = f.openings.filter(q => q.kind === 'door'); FP.setDoors(ds, !ds.some(q => q.open)); }   // нет выбора и рядом нет двери: все двери
+  };
+
   FP.duplicate = function () {
     const o = FP.selObj(); if (!o || FP.sel.type === 'opening') return; FP.snap(); const f = FP.floor(), c = JSON.parse(JSON.stringify(o)); c.id = FP.uid();
     if (FP.sel.type === 'room') { c.x += .5; c.y += .5; c.name += ' (копия)'; f.rooms.push(c); }

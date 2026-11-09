@@ -20,7 +20,11 @@
   <button id="btnCopy">Копировать</button>
   <button id="btnNew">Новый</button>
   <button id="btnHelp">? Справка</button>
-  <button id="btnTheme" title="Тема">◐</button>
+  <button id="btnTheme" title="Тема сайта">◐</button><button id="btnCanvasTheme" title="Тема холста: авто">▦</button>
+  <button id="btnL" title="Левая панель">◧</button><button id="btnR" title="Правая панель">◨</button><button id="btnFs" title="Полный экран">⛶</button>
+  <button id="doorsBtn">Закрыть двери</button>
+  <select id="imgSel" title="Экспорт изображения"><option value="">Картинка…</option><option value="png">PNG</option><option value="svg">SVG (план)</option><option value="pdf">PDF</option></select>
+  <button id="btnLang" title="Language">EN</button>
   <span class="grow"></span>
   <div class="seg"><button id="v2d" class="on">2D</button><button id="v3d">3D</button></div>
 </header>
@@ -52,9 +56,10 @@
       <button id="o3tour">Автообход</button>
       <label class="chk"><input type="checkbox" id="o3ceil" checked> потолок</label>
       <label class="chk"><input type="checkbox" id="o3night"> вечер (лампы)</label>
-      <button id="o3lampsOn" title="Включить все лампы">Лампы: вкл</button>
-      <button id="o3lampsOff" title="Выключить все лампы">Лампы: выкл</button>
+      <button id="o3lamps">Выключить свет</button>
       <label>Яркость ламп <input type="range" id="o3lamp" min="0.3" max="2.5" step="0.1" value="1"></label>
+      <label title="0 = восток, 90 = юг, 180 = запад, 270 = север">Солнце <input type="range" id="o3sun" min="0" max="355" step="5" value="45"></label>
+      <button id="o3sunAuto">Авто</button>
       <button id="o3fit">Вписать</button>
       <span id="o3help"></span>
     </div>
@@ -124,7 +129,7 @@
     <ul>
       <li>Облёт: ЛКМ — вращать, ПКМ/<kbd>Shift</kbd> — сдвиг, колесо — масштаб</li>
       <li>Ходьба: <kbd>W A S D</kbd>/стрелки, <kbd>Q</kbd>/<kbd>E</kbd> поворот, <kbd>Shift</kbd> бег, мышь — взгляд</li>
-      <li>Колесо в ходьбе — угол обзора (шире — видно больше комнаты); <kbd>Shift</kbd>+колесо — рост глаз</li>
+      <li>Колесо в ходьбе — шаг вперёд/назад; <kbd>Ctrl</kbd>+колесо — угол обзора; <kbd>Shift</kbd>+колесо — рост глаз</li>
       <li>Двойной клик по плану (2D) — встать в эту точку в 3D</li>
       <li>Стены: полные / полупрозрачные / срезанные / без стен</li>
       <li>Лампы: включите «вечер», затем кликайте по лампе в 3D (вкл/выкл) или используйте кнопки «Лампы» в панели</li>
@@ -147,5 +152,6 @@
 <script src="js/ui_keys.js"></script>
 <script src="js/ui_lib.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/i18n.js"></script>
 </body>
 </html>

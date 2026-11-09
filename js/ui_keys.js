@@ -11,6 +11,9 @@
       else if (k.toLowerCase() === 'd' && FP.view === '2d') { e.preventDefault(); FP.duplicate(); }
       return;
     }
+
+    if (e.code === 'KeyO' && !e.altKey) { FP.toggleDoorKey(); return; }   // O: открыть/закрыть дверь (выбранную / ближайшую в 3D / все)
+
     if (FP.view === '3d') return;
     const key = k.toLowerCase(), map = { v: 'select', r: 'room', p: 'poly', w: 'wall', d: 'door', n: 'window', g: 'gap', m: 'measure', h: 'pan' };
     if (map[key] && !e.altKey) { FP.v2.setTool(map[key]); return; }

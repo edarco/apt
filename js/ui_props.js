@@ -51,6 +51,11 @@
     root.appendChild(cb);
 
     root.appendChild(row('Размеры на плане', chkIn(s.dims, v => { s.dims = v; })));
+
+    root.appendChild(row('Текстура пола на плане', chkIn(!!s.planTex, v => { s.planTex = v; })));
+    const ds = f.openings.filter(o => o.kind === 'door');
+    if (ds.length) { const bd = el('div', 'btns'); bd.appendChild(btn(ds.every(o => o.open) ? 'Закрыть двери' : 'Открыть двери', () => FP.setDoors(ds, !ds.every(o => o.open)))); root.appendChild(bd); }
+
     root.appendChild(row('Мебель с комнатой', chkIn(s.moveFurn, v => { s.moveFurn = v; })));
     const b = el('div', 'btns'); b.appendChild(btn('+ Комната', () => FP.addRoom())); b.appendChild(btn('+ Стена', () => FP.addWall())); root.appendChild(b);
 
@@ -163,6 +168,16 @@
       root.appendChild(row(n, i));
     });
 
+    root.appendChild(el('h4', '', 'Перила (открытый балкон)'));
+    const rsides = r.poly ? r.poly.map((_, i) => ['p' + i, 'Сторона ' + (i + 1)]) : [['n', 'Север'], ['s', 'Юг'], ['w', 'Запад'], ['e', 'Восток']];
+    rsides.forEach(([k, n]) => root.appendChild(row(n + ' — перила', chkIn(!!(r.rail && r.rail[k]), v => { r.rail = r.rail || {}; if (v) r.rail[k] = true; else delete r.rail[k]; }))));
+    const keepSel = selIn(rsides, rsides[0][0], () => {}); keepSel.onchange = null;
+    root.appendChild(row('Стена к квартире', keepSel));
+    const brl = el('div', 'btns');
+    brl.appendChild(btn('Перила на остальных сторонах', () => edit(() => { r.rail = {}; rsides.forEach(a => { if (a[0] !== keepSel.value) r.rail[a[0]] = true; }); })));
+    brl.appendChild(btn('Убрать перила', () => edit(() => { delete r.rail; })));
+    root.appendChild(brl);
+
     root.appendChild(el('h4', '', 'Добавить проём'));
     const sd = selIn(r.poly ? r.poly.map((_, i) => ['p' + i, 'Сторона ' + (i + 1)]) : [['n', 'Север (верх)'], ['s', 'Юг (низ)'], ['w', 'Запад (лево)'], ['e', 'Восток (право)']], r.poly ? 'p0' : 'n', () => {}); sd.onchange = null;
     root.appendChild(row('Сторона', sd));
@@ -200,6 +215,9 @@
     root.appendChild(row('Высота проёма, м', numIn(Object.assign(o, { h: hh.h }), 'h', { min: .3 })));
     if (o.kind === 'window') root.appendChild(row('Высота подоконника', numIn(Object.assign(o, { sill: hh.sill }), 'sill', { min: 0 })));
     if (o.kind === 'door') {
+      root.appendChild(row('Открыта', chkIn(!!o.open, v => { o.open = v; })));
+      root.appendChild(row('Входная дверь', chkIn(!!o.main, v => { o.main = v; })));
+      root.appendChild(matRow('Дверь', 'door', FP.doorSpec(o), s => { o.fin = s; }, 'Цвет / материал двери'));
       root.appendChild(row('Петли справа', chkIn(o.flip, v => { o.flip = v; })));
       root.appendChild(row('Открывается', selIn([[1, 'в одну сторону'], [-1, 'в другую']], o.swing === -1 ? -1 : 1, v => { o.swing = +v; })));
     }
