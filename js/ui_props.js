@@ -3,6 +3,7 @@
 
   const matRow = FP.ui.matRow, clone = o => JSON.parse(JSON.stringify(o));
   let finScope = 'all';
+  FP.ui.setScope = s => { finScope = s; };
   // блок отделки стены: верх + необязательный низ с высотой (getZ — текущая зона, setZ(fn) — меняет копию зоны и сохраняет её в данные)
   function finBlock(root, getZ, setZ) {
     const z = getZ(), E = fn => edit(() => setZ(fn));
@@ -146,7 +147,10 @@
 
     scSel.value = finScope; scSel.onchange = () => { finScope = scSel.value; FP.ui.props(); };
     root.appendChild(row('Сторона', scSel));
-    finBlock(root, () => FP.zoneOf(r, finScope), fn => { const z = clone(FP.zoneOf(r, finScope)); fn(z); r.fin = r.fin || {}; r.fin[finScope] = z; });
+
+    // «Все стены» сбрасывает индивидуальные стороны, поэтому красится всё
+    finBlock(root, () => FP.zoneOf(r, finScope), fn => { const z = clone(FP.zoneOf(r, finScope)); fn(z); r.fin = r.fin || {}; if (finScope === 'all') r.fin = { all: z }; else r.fin[finScope] = z; });
+
     const bw2 = el('div', 'btns');
     if (finScope !== 'all' && r.fin && r.fin[finScope]) bw2.appendChild(btn('Сбросить сторону', () => edit(() => { delete r.fin[finScope]; })));
     bw2.appendChild(btn('Отделку → всем комнатам', () => edit(() => { FP.floor().rooms.forEach(q => { if (q !== r) q.fin = clone(r.fin || {}); }); })));

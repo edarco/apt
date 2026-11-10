@@ -92,3 +92,17 @@ dialog{max-width:94vw}
   .row>span{width:80px}
 }
 @media (pointer:coarse){ #tools kbd,.kbd{display:none} }
+
+.edge{position:absolute;top:8px;z-index:6;width:22px;height:34px;padding:0;font-size:18px;line-height:1;opacity:.75}
+.edge:hover{opacity:1}
+#btnL{left:0;border-radius:0 8px 8px 0}
+#btnR{right:0;border-radius:8px 0 0 8px}
+#corner{position:absolute;right:8px;bottom:6px;z-index:4;display:flex;gap:6px}
+#corner button{width:34px;height:30px;padding:0;font-size:16px;opacity:.85}
+#corner button:hover{opacity:1}
+#bar3d{left:34px;right:34px}
+#center:fullscreen .edge{display:none}
+@media (max-width:900px){
+  body:not(.hideL) #btnL{left:min(78vw,260px)}
+  body:not(.hideR) #btnR{right:min(88vw,330px)}
+}

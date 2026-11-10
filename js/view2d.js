@@ -1,6 +1,6 @@
 (function () {
   const cv = FP.$('c2d'), c = cv.getContext('2d');
-  const V = FP.v2 = { s: 60, ox: 120, oy: 90, tool: 'select' };
+  const V = FP.v2 = { s: 60, ox: 120, oy: 90, tool: 'select', lock: false };
 
   const LIGHT = { bg: '#faf8f4', g1: '#ddd7ca', g2: '#eee9df', wall: '#2f2f33', lblBg: 'rgba(255,255,255,.88)', lblTx: '#222', room1: '#333', room2: '#555', door: '#555' };
   const DARK  = { bg: '#3E3838', g1: '#5f636f', g2: '#555965', wall: '#010101', lblBg: 'rgba(37,38,43,.92)', lblTx: '#eee', room1: '#eee', room2: '#bbb', door: '#b8b6b6' };
@@ -14,9 +14,14 @@
   V.center = () => ({ x: wx(W / 2), y: wy(H / 2) });
   V.setTool = function (t) {
     V.tool = t; tmp = null; hover = null;
-    cv.style.cursor = { select: 'default', pan: 'grab', measure: 'crosshair' }[t] || 'crosshair';
+    cv.style.cursor = V.lock ? 'grab' : ({ select: 'default', pan: 'grab', measure: 'crosshair' }[t] || 'crosshair');
     document.querySelectorAll('#tools button[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
     V.draw();
+  };
+  V.setLock = function (v) {                         // true: левая кнопка/палец только двигают план
+    V.lock = !!v;
+    cv.style.cursor = V.lock ? 'grab' : ({ select: 'default', pan: 'grab', measure: 'crosshair' }[V.tool] || 'crosshair');
+    document.querySelectorAll('[data-lock]').forEach(b => b.classList.toggle('on', V.lock));
   };
   function resize() {
     const r = cv.parentElement.getBoundingClientRect(); dpr = window.devicePixelRatio || 1; W = r.width; H = r.height;
@@ -142,7 +147,10 @@
     const R = (x, y, a, b) => c.strokeRect(x, y, a, b);
     const Ln = (a, b, cc, dd) => { c.beginPath(); c.moveTo(a, b); c.lineTo(cc, dd); c.stroke(); };
     switch (m.kind) {
-      case 'bed': R(-w / 2 + w * .06, -d / 2 + d * .04, w * .4, d * .14); R(w / 2 - w * .46, -d / 2 + d * .04, w * .4, d * .14); Ln(-w / 2, -d / 2 + d * .3, w / 2, -d / 2 + d * .3); break;
+      case 'bed':
+        if (m.width < 1.35) R(-w * .35, -d / 2 + d * .04, w * .7, d * .14);
+        else { R(-w / 2 + w * .06, -d / 2 + d * .04, w * .4, d * .14); R(w / 2 - w * .46, -d / 2 + d * .04, w * .4, d * .14); }
+        Ln(-w / 2, -d / 2 + d * .3, w / 2, -d / 2 + d * .3); break;
       case 'sofa': case 'armchair': R(-w / 2, -d / 2, w, d * .25); break;
       case 'chair': Ln(-w / 2, -d / 2 + d * .2, w / 2, -d / 2 + d * .2); break;
       case 'bath': R(-w / 2 + w * .1, -d / 2 + d * .08, w * .8, d * .84); break;
@@ -345,7 +353,7 @@
 
   cv.addEventListener('pointerdown', e => {
     cv.setPointerCapture(e.pointerId); const p = P(e), x = wx(p.x), y = wy(p.y); V.mx = x; V.my = y;
-    if (e.button === 1 || e.button === 2 || V.tool === 'pan' || space) { drag = { mode: 'pan', px: p.x, py: p.y, ox: V.ox, oy: V.oy }; cv.style.cursor = 'grabbing'; return; }
+    if (e.button === 1 || e.button === 2 || V.tool === 'pan' || space || V.lock) { drag = { mode: 'pan', px: p.x, py: p.y, ox: V.ox, oy: V.oy }; cv.style.cursor = 'grabbing'; return; }
     const f = FP.floor();
     switch (V.tool) {
       case 'room': tmp = { x0: snv(x, e), y0: snv(y, e), x1: snv(x, e), y1: snv(y, e) }; drag = { mode: 'draw' }; return;
@@ -467,7 +475,7 @@
         f.rooms.push(r); FP.select('room', r.id); FP.changed();
       }
       tmp = null;
-    } else if (drag.mode === 'pan') cv.style.cursor = V.tool === 'pan' ? 'grab' : 'default';
+    } else if (drag.mode === 'pan') cv.style.cursor = (V.tool === 'pan' || V.lock) ? 'grab' : 'default';
     else if (drag.moved) FP.changed();
     drag = null; V.draw(); FP.ui && FP.ui.props();
   });

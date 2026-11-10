@@ -187,7 +187,9 @@
       if (w2.id === w.id) { out.push({ s: o.offset, e: o.offset + o.width, o, own: true }); return; }
       const L2 = FP.wlen(w2) || 1, u2x = (w2.x2 - w2.x1) / L2, u2y = (w2.y2 - w2.y1) / L2;
       if (Math.abs(ux * u2y - uy * u2x) > 0.01) return;
-      if (Math.abs((w2.x1 - w.x1) * (-uy) + (w2.y1 - w.y1) * ux) > 0.5 * Math.max(w.t, w2.t) + 0.03) return;
+
+      if (Math.abs((w2.x1 - w.x1) * (-uy) + (w2.y1 - w.y1) * ux) > 0.5 * (w.t + w2.t) + 0.03) return;
+
       const ax = w2.x1 + u2x * o.offset, ay = w2.y1 + u2y * o.offset;
       const pa = (ax - w.x1) * ux + (ay - w.y1) * uy, pb = pa + (u2x * ux + u2y * uy) * o.width;
       out.push({ s: Math.min(pa, pb), e: Math.max(pa, pb), o, own: false });
@@ -304,17 +306,25 @@
   // Навесное (розетки, шкафчики, зеркала, ТВ...): при перетаскивании около стены прилипает к её поверхности и поворачивается задней стороной к стене
   FP.wallSnap = function (m) {
     const M = FP.model(m); if (!M || !M.wall) return;
-    let best = null, bd = 0.6;
+    let best = null, bd = 0.45;
     FP.getWalls(FP.floor()).forEach(w => {
       const L = FP.wlen(w); if (L < .01) return;
-      const ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, px = m.x - w.x1, py = m.y - w.y1;
-      const t = Math.max(0, Math.min(L, px * ux + py * uy)), nx = -uy, ny = ux, sd = px * nx + py * ny, side = sd >= 0 ? 1 : -1;
-      const d = Math.abs(sd) - w.t / 2;
-      if (d < bd) { bd = d; best = { w, t, nx: nx * side, ny: ny * side, ux, uy }; }
+      const ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, px = m.x - w.x1, py = m.y - w.y1, t0 = px * ux + py * uy;
+      if (t0 < -.05 || t0 > L + .05) return;                 // предмет должен быть напротив самой стены, а не её продолжения
+      const nx = -uy, ny = ux, sd = px * nx + py * ny; let side = sd >= 0 ? 1 : -1;
+      if (w.room) {                                          // стена комнаты: только со стороны комнаты (внутрь)
+        const ni = w.nx != null ? [w.nx, w.ny] : { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[w.side];
+        side = (ni[0] * nx + ni[1] * ny) >= 0 ? 1 : -1;
+        if (sd * side < -w.t / 2) return;                    // середина стены пройдена: это уже соседняя комната
+      }
+      const d = Math.abs(sd * side - w.t / 2);               // расстояние до лицевой поверхности стены
+      if (d < bd) { bd = d; best = { w, t0, nx: nx * side, ny: ny * side, ux, uy, L }; }
     });
     if (!best) return;
-    const dist = best.w.t / 2 + m.depth / 2, bx = best.w.x1 + best.ux * best.t, by = best.w.y1 + best.uy * best.t;
+    const hw = m.width / 2, t = best.L > 2 * hw ? Math.max(hw, Math.min(best.L - hw, best.t0)) : best.L / 2;   // не заходит за углы стены
+    const dist = best.w.t / 2 + m.depth / 2, bx = best.w.x1 + best.ux * t, by = best.w.y1 + best.uy * t;
     m.x = +(bx + best.nx * dist).toFixed(3); m.y = +(by + best.ny * dist).toFixed(3);
     m.rotation = Math.round(((Math.atan2(-best.nx, best.ny) * 180 / Math.PI) + 360) % 360);
   };
+
 })();

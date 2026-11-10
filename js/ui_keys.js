@@ -14,9 +14,12 @@
 
     if (e.code === 'KeyO' && !e.altKey) { FP.toggleDoorKey(); return; }   // O: открыть/закрыть дверь (выбранную / ближайшую в 3D / все)
 
-    if (FP.view === '3d') return;
+    if (FP.view === '3d') { if (k === 'Escape') FP.select(null); else if (k.toLowerCase() === 'f') FP.v3.fitView(); return; }
+
     const key = k.toLowerCase(), map = { v: 'select', r: 'room', p: 'poly', w: 'wall', d: 'door', n: 'window', g: 'gap', m: 'measure', h: 'pan' };
+    if (key === 'l' && !e.altKey) { FP.v2.setLock(!FP.v2.lock); return; }
     if (map[key] && !e.altKey) { FP.v2.setTool(map[key]); return; }
+
     if (key === 'f') FP.v2.fit();
     else if (k === ']') FP.rotateSel(e.shiftKey ? 90 : 15);
     else if (k === '[') FP.rotateSel(e.shiftKey ? -90 : -15);

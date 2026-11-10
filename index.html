@@ -21,7 +21,6 @@
   <button id="btnNew">Новый</button>
   <button id="btnHelp">? Справка</button>
   <button id="btnTheme" title="Тема сайта">◐</button><button id="btnCanvasTheme" title="Тема холста: авто">▦</button>
-  <button id="btnL" title="Левая панель">◧</button><button id="btnR" title="Правая панель">◨</button><button id="btnFs" title="Полный экран">⛶</button>
   <button id="doorsBtn">Закрыть двери</button>
   <select id="imgSel" title="Экспорт изображения"><option value="">Картинка…</option><option value="png">PNG</option><option value="svg">SVG (план)</option><option value="pdf">PDF</option></select>
   <button id="btnLang" title="Language">EN</button>
@@ -56,6 +55,8 @@
       <button id="o3tour">Автообход</button>
       <label class="chk"><input type="checkbox" id="o3ceil" checked> потолок</label>
       <label class="chk"><input type="checkbox" id="o3night"> вечер (лампы)</label>
+      <label class="chk"><input type="checkbox" id="o3pick" checked> выбор кликом</label>
+      <label class="chk"><input type="checkbox" id="o3frame" checked> рамка выбора</label>
       <button id="o3lamps">Выключить свет</button>
       <label>Яркость ламп <input type="range" id="o3lamp" min="0.3" max="2.5" step="0.1" value="1"></label>
       <label title="0 = восток, 90 = юг, 180 = запад, 270 = север">Солнце <input type="range" id="o3sun" min="0" max="355" step="5" value="45"></label>
@@ -64,6 +65,9 @@
       <span id="o3help"></span>
     </div>
     <div id="status"></div>
+    <button id="btnL" class="edge" title="Скрыть / показать левую панель">‹</button>
+    <button id="btnR" class="edge" title="Скрыть / показать правую панель">›</button>
+    <div id="corner"><button id="btnLock" data-lock title="Только двигать план (L)">✋</button><button id="btnFs" title="Полный экран">⛶</button></div>
   </section>
   <aside id="right"><div id="props"></div></aside>
 </div>

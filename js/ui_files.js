@@ -99,10 +99,21 @@
     $('v2d').onclick = () => FP.setView('2d'); $('v3d').onclick = () => FP.setView('3d');
     $('btnHelp').onclick = () => $('helpDlg').showModal();
 
-    $('btnL').onclick = () => document.body.classList.toggle('hideL');
-    $('btnR').onclick = () => document.body.classList.toggle('hideR');
+    const syncEdge = () => { $('btnL').textContent = document.body.classList.contains('hideL') ? '›' : '‹'; $('btnR').textContent = document.body.classList.contains('hideR') ? '‹' : '›'; };
+    FP.ui.syncEdge = syncEdge;
+    $('btnL').onclick = () => { document.body.classList.toggle('hideL'); syncEdge(); };
+    $('btnR').onclick = () => { document.body.classList.toggle('hideR'); syncEdge(); };
     $('btnFs').onclick = () => { const c = $('center'); document.fullscreenElement ? document.exitFullscreen() : c.requestFullscreen && c.requestFullscreen(); };
     if (matchMedia('(max-width:900px)').matches) document.body.classList.add('hideL', 'hideR');   // на телефоне панели скрыты
+    syncEdge();
+    // режим «только двигать план» (см. п. 3)
+    $('btnLock').onclick = () => FP.v2.setLock(!FP.v2.lock);
+    let lockBefore = false;                                  // в полном экране режим включается сам, при выходе возвращается как был
+    document.addEventListener('fullscreenchange', () => {
+      const fs = !!document.fullscreenElement;
+      if (fs) { lockBefore = FP.v2.lock; FP.v2.setLock(true); } else FP.v2.setLock(lockBefore);
+      $('btnFs').textContent = fs ? '✕' : '⛶';
+    });
 
     $('doorsBtn').onclick = () => { const ds = FP.floor().openings.filter(o => o.kind === 'door'); if (ds.length) FP.setDoors(ds, !ds.every(o => o.open)); };
     $('helpClose').onclick = () => $('helpDlg').close();
