@@ -28,8 +28,8 @@ input[type=color]{padding:0;width:34px;height:26px;border:1px solid var(--line);
 #bar3d[hidden]{display:none}
 #bar3d label{display:inline-flex;align-items:center;gap:5px}
 #o3help{color:var(--mut);font-size:12px}
-#tools{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px}
-#tools button{text-align:left;font-size:12px}
+#tools{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:10px}
+#tools button{text-align:center;font-size:15px;padding:5px 0}
 #tools kbd,.kbd{float:right;opacity:.55;font-size:10px}
 #catalog h4{margin:10px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
 #catalog button{display:block;width:100%;text-align:left;margin-bottom:4px;font-size:12px}
@@ -106,3 +106,27 @@ dialog{max-width:94vw}
   body:not(.hideL) #btnL{left:min(78vw,260px)}
   body:not(.hideR) #btnR{right:min(88vw,330px)}
 }
+
+/* ---- выпадающие меню ---- */
+.dd{position:relative;display:inline-block}
+.ddl{position:fixed;z-index:60;min-width:200px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.ddl[hidden]{display:none}
+.ddl button{display:block;width:100%;text-align:left;border:0;background:transparent;margin:0;white-space:nowrap}
+.ddl button:hover{background:rgba(128,128,128,.2)}
+.ddl hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+/* кнопки каталога в одну строку */
+#catalog .btns>button,#catalog .dd>button{display:inline-block;width:auto;margin:0}
+/* ---- панель 3D: кнопки-переключатели и всплывающие настройки ---- */
+.tbtn{display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer}
+.tbtn input{display:none}
+.tbtn:has(input:checked){background:var(--ink);color:var(--panel)}
+#o3corners{display:inline-flex;gap:4px}
+.dd3{position:relative}
+.dd3>summary{cursor:pointer;list-style:none;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.dd3>summary::-webkit-details-marker{display:none}
+.ddp{position:absolute;right:0;top:calc(100% + 4px);z-index:5;display:flex;flex-direction:column;gap:8px;min-width:280px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.ddp #o3help{max-width:280px;white-space:normal}
+@media (max-width:900px){.ddp{position:static;box-shadow:none}}
+/* ---- красные предупреждения: читаемы и на тёмном фоне ---- */
+.warn,#props .warn{color:#b3261e}
+[data-theme=dark] .warn,[data-theme=dark] #props .warn{color:#ff8a7a}

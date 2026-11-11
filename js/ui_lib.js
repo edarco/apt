@@ -57,4 +57,35 @@
     document.body.appendChild(dlg); dlg.showModal();
   }
 
+  FP.ui.glbHelp = () => {
+    const dlg = document.createElement('dialog'), body = el('div', '', `
+      <h3>Импорт 3D-модели (GLB)</h3>
+      <h4>Где взять модели</h4>
+      <ul>
+        <li><a href="https://kenney.nl/assets/furniture-kit" target="_blank" rel="noopener">Kenney Furniture Kit</a>: CC0, много мебели в одном архиве (low-poly)</li>
+        <li><a href="https://polyhaven.com/models" target="_blank" rel="noopener">Poly Haven</a>: CC0, фотореалистичные модели по одной</li>
+        <li><a href="https://quaternius.com" target="_blank" rel="noopener">Quaternius</a>: CC0, наборы GLB</li>
+        <li><a href="https://poly.pizza" target="_blank" rel="noopener">Poly Pizza</a>: GLB без регистрации, чаще CC-BY (нужно указать автора)</li>
+      </ul>
+      <h4>Как импортировать</h4>
+      <ol>
+        <li>Нажмите «Импорт GLB» и выберите файл <b>.glb</b>.</li>
+        <li>В окне проверьте название, группу каталога и размеры. Модель вписывается именно в эти ширину, глубину и высоту (если модель была в сантиметрах, размеры переведены в метры автоматически).</li>
+        <li>Нажмите «Добавить»: модель появится в каталоге слева в выбранной группе. Клик по ней ставит её на план.</li>
+        <li>Если «перед» модели смотрит не туда, поверните её на плане (поле «Поворот» справа).</li>
+      </ol>
+      <h4>Важно</h4>
+      <ul>
+        <li>Формат <b>.gltf</b> с отдельными папками (так часто отдаёт Poly Haven) соберите в .glb в Blender: File → Export → glTF 2.0, формат «glTF Binary (.glb)».</li>
+        <li>Модели со сжатием Draco в этой версии не читаются (нет DRACOLoader): при экспорте из Blender сжатие Draco отключите.</li>
+        <li>Модель хранится в IndexedDB браузера и встраивается в экспорт JSON проекта (файл проекта станет больше).</li>
+        <li>Нужен интернет (загрузчик GLB подключается с CDN). Локальный сервер для самой кнопки импорта не обязателен (в прошлом ответе я написал иначе, это было неточно).</li>
+        <li>Материалы GLB пока переводятся в упрощённые (Phong): отражений и PBR нет, это отдельный будущий шаг.</li>
+        <li>Не растягивайте мягкую мебель сильно: подушки искажаются.</li>
+      </ul>`);
+    body.style.cssText = 'width:560px;max-width:80vw;max-height:70vh;overflow:auto;line-height:1.5';
+    const b = el('div', 'dlgBtns'), ok = el('button', '', 'Закрыть'); ok.onclick = () => { dlg.close(); dlg.remove(); };
+    b.appendChild(ok); dlg.appendChild(body); dlg.appendChild(b); document.body.appendChild(dlg); dlg.showModal();
+  };
+
 })();

@@ -309,9 +309,16 @@
     return g;
   }
 
+  // мебель, которая блокирует ходьбу: доходит до уровня глаз (шкафы, холодильники, стеллажи, колонны)
+  function blocksWalk(m, f) {
+    const M = FP.model(m), yb = M ? (M.ceil ? f.height - m.height : (m.elev != null ? m.elev : (M.elev || 0))) : 0;
+    return m.depth >= .12 && m.kind !== 'curtain' && !(M && M.ceil) && yb < 1.7 && yb + m.height > 1.3;
+  }
   function lampsOn() { return opt.light; }
+
   function setLamps(on) { opt.light = on; needs = true; updLampBtn(); }      // день/вечер не трогаем
-  function updLampBtn() { const b = FP.$('o3lamps'); if (b) b.textContent = opt.light ? 'Выключить свет' : 'Включить свет'; }
+
+  function updLampBtn() { const b = FP.$('o3lamps'); if (b) { b.title = opt.light ? 'Выключить свет' : 'Включить свет'; b.classList.toggle('on', !!opt.light); } }
 
   // Функция затемнения у стен
   const aoc = new Map();
@@ -510,7 +517,10 @@
           dg.userData.sel = curSel; root.add(dg); doors.push({ g: dg, o, th0, sgn });
           if (o.main && walking) {                                  // подъезд за входной дверью: коробка, видимая изнутри
             const SD = 2.2, k = w.t / 2 + SD / 2 + .01;
-            const sw = new THREE.Mesh(new THREE.BoxGeometry(wd + 2.4, f.height, SD), mat('#cfc9bb', { side: THREE.BackSide }));
+
+            const bm = c => mat(c, { side: THREE.BackSide });                         // подъезд: тёмно-серый, пол темнее, потолок светлее
+            const sw = new THREE.Mesh(new THREE.BoxGeometry(wd + 2.4, f.height, SD), [bm('#4d5158'), bm('#4d5158'), bm('#6a6e75'), bm('#34373c'), bm('#4d5158'), bm('#4d5158')]);
+
             sw.position.set(pos.cx - pos.nx * k, f.height / 2, pos.cy - pos.ny * k); sw.rotation.y = ang; root.add(sw);
           }
           put(p.s - .04, p.s, 0, p.z1 + .04, w.t + .03, '#f4f1ea'); put(p.e, p.e + .04, 0, p.z1 + .04, w.t + .03, '#f4f1ea');   // наличники
@@ -527,7 +537,7 @@
       g.position.set(m.x, yb, m.y); g.rotation.y = -(m.rotation || 0) * Math.PI / 180; if (m.flipX) g.scale.x *= -1; root.add(g);
 
       g.userData.fid = m.id; g.userData.sel = { type: 'furniture', id: m.id };
-      if (m.depth >= .12 && m.kind !== 'rug' && m.kind !== 'rug_round' && m.kind !== 'curtain' && !/^(chair|office_chair|barstool|pouf|robot_vac)$/.test(m.kind) && !(M && M.ceil) && yb < 1.5 && yb + m.height > .3) {   // твёрдая мебель: не пройти насквозь
+      if (blocksWalk(m, f)) {   // блокирует только мебель до уровня глаз; низкая (столы, стулья, диваны) не мешает ходить
         FP.footRects(m).forEach(q => colRects.push(q));
       }
 
@@ -630,6 +640,22 @@
     if (!best) best = [c[0], c[1]];
     walk.x = best[0]; walk.z = best[1]; walk.yaw = Math.atan2(c[0] - best[0], -(c[1] - best[1])); walk.pitch = -.14;
     opt.fov = Math.max(opt.fov, 90); vel.x = vel.z = 0;
+    opt.cam = 'walk'; FP.$('o3cam').value = 'walk'; FP.$('o3room').value = r.id; needs = true; updateHelp();
+  };
+
+  V3.enterCorner = function (r, k) {                  // встать в k-й угол комнаты и смотреть на центр
+    tour = null; FP.$('o3tour').classList.remove('on');
+    const P = FP.rpoly(r), c = FP.roomCenter(r), f = FP.floor(), q = P[k]; if (!q) return;
+    const dx = c[0] - q[0], dy = c[1] - q[1], L = Math.hypot(dx, dy) || 1; let pos = null;
+    for (let s = .45; s < L * .8; s += .1) {            // идём от угла к центру, пока не найдём место вне высокой мебели
+      const x = q[0] + dx / L * s, y = q[1] + dy / L * s;
+      if (FP.pointInRoom(r, x, y) && !f.furniture.some(m => blocksWalk(m, f) && FP.footRects(m).some(z => { const ex = x - z.cx, ey = y - z.cy; return Math.abs(ex * z.ux + ey * z.uy) < z.hl + .2 && Math.abs(-ex * z.uy + ey * z.ux) < z.ht + .2; }))) { pos = [x, y]; break; }
+    }
+    if (!pos) pos = [c[0], c[1]];
+    walk.x = pos[0]; walk.z = pos[1]; walk.eye = Math.max(walk.eye, 2.0);
+    walk.yaw = Math.atan2(c[0] - pos[0], -(c[1] - pos[1]));
+    walk.pitch = -Math.atan((walk.eye - .6) / Math.max(1.5, Math.hypot(c[0] - pos[0], c[1] - pos[1])));   // чуть вниз, на пол комнаты
+    opt.fov = Math.max(opt.fov, 95); vel.x = vel.z = 0;
     opt.cam = 'walk'; FP.$('o3cam').value = 'walk'; FP.$('o3room').value = r.id; needs = true; updateHelp();
   };
 
@@ -777,14 +803,26 @@
   V3.stop = function () { cancelAnimationFrame(raf); raf = 0; };
 
   // ---------- панель 3D ----------
+  function refreshCorners() {                        // кнопки углов выбранной комнаты
+    const box = FP.$('o3corners'), id = FP.$('o3room').value; if (!box) return;
+    const r = FP.floor().rooms.find(q => q.id === id); if (!r) { box.innerHTML = ''; box.dataset.k = ''; return; }
+    const lab = r.poly ? r.poly.map((_, i) => String(i + 1)) : ['↖', '↗', '↘', '↙'], key = id + '|' + lab.length;
+    if (box.dataset.k === key) return; box.dataset.k = key; box.innerHTML = '';
+    lab.forEach((t, i) => {
+      const b = document.createElement('button'); b.textContent = t; b.title = 'Встать в угол ' + (i + 1) + ': вся комната перед глазами';
+      b.onclick = () => { const rr = FP.floor().rooms.find(q => q.id === id); if (rr) V3.enterCorner(rr, i); }; box.appendChild(b);
+    });
+  }
+
   function refreshRooms() {
     const s = FP.$('o3room'), v = s.value; s.innerHTML = '';
     FP.floor().rooms.forEach(r => { const o = document.createElement('option'); o.value = r.id; o.textContent = r.name; s.appendChild(o); });
-    if (v) s.value = v;
+    if (v) s.value = v; refreshCorners();
   }
   function updateHelp() {
     FP.$('o3help').textContent = isWalk() ? 'WASD / стрелки — ходьба, Q/E — поворот, мышь — взгляд, Shift — бег, колесо — вперёд/назад, Ctrl+колесо — угол обзора, Shift+колесо — рост глаз' : 'ЛКМ — вращать, ПКМ/Shift — сдвиг, колесо — масштаб';
     FP.$('o3cutv').textContent = opt.cut.toFixed(1) + ' м';
+    refreshCorners();
   }
   function bindBar() {
     FP.$('o3walls').onchange = e => { opt.walls = e.target.value; needs = true; };
@@ -815,6 +853,7 @@
     };
 
     FP.$('o3go').onclick = () => { const r = FP.floor().rooms.find(r => r.id === FP.$('o3room').value); if (r) V3.enterRoom(r); };
+    FP.$('o3room').onchange = refreshCorners;
 
     FP.$('o3tour').onclick = () => {
       if (tour) { tour = null; FP.$('o3tour').classList.remove('on'); return; }

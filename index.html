@@ -7,25 +7,29 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
 <header id="top">
   <input id="projName" title="Название проекта">
   <select id="floorSel" title="Этаж"></select>
-  <button id="addFloor">+ этаж</button><button id="delFloor">− этаж</button>
+  <span id="mnuFloor"></span><span id="mnuFile"></span>
   <span class="sep"></span>
   <button id="undo" title="Ctrl+Z">↶</button><button id="redo" title="Ctrl+Shift+Z">↷</button>
-  <span class="sep"></span>
-  <button id="btnImport">Импорт</button><input type="file" id="fileIn" accept=".json,application/json" hidden>
-  <button id="btnPaste">Вставить JSON</button>
-  <button id="btnExport" title="Ctrl+S">Экспорт</button>
-  <button id="btnCopy">Копировать</button>
-  <button id="btnNew">Новый</button>
-  <button id="btnHelp">? Справка</button>
-  <button id="btnTheme" title="Тема сайта">◐</button><button id="btnCanvasTheme" title="Тема холста: авто">▦</button>
   <button id="doorsBtn">Закрыть двери</button>
-  <select id="imgSel" title="Экспорт изображения"><option value="">Картинка…</option><option value="png">PNG</option><option value="svg">SVG (план)</option><option value="pdf">PDF</option></select>
-  <button id="btnLang" title="Language">EN</button>
+  <span id="mnuMore"></span>
   <span class="grow"></span>
   <div class="seg"><button id="v2d" class="on">2D</button><button id="v3d">3D</button></div>
+  <div id="topHidden" hidden>
+    <button id="addFloor">+ этаж</button><button id="delFloor">− этаж</button>
+    <button id="btnImport">Импорт</button><input type="file" id="fileIn" accept=".json,application/json" hidden>
+    <button id="btnPaste">Вставить JSON</button>
+    <button id="btnExport" title="Ctrl+S">Экспорт</button>
+    <button id="btnCopy">Копировать</button>
+    <button id="btnNew">Новый</button>
+    <button id="btnHelp">? Справка</button>
+    <button id="btnTheme" title="Тема сайта">◐</button><button id="btnCanvasTheme" title="Тема холста: авто">▦</button>
+    <select id="imgSel" title="Экспорт изображения"><option value="">Картинка…</option><option value="png">PNG</option><option value="svg">SVG (план)</option><option value="pdf">PDF</option></select>
+    <button id="btnLang" title="Language">EN</button>
+  </div>
 </header>
 
 <div id="main">
@@ -36,8 +40,12 @@
   <section id="center">
     <canvas id="c2d"></canvas>
     <div id="c3d"></div>
+
     <div id="bar3d" hidden>
-      <label>Стены
+      <label title="Режим камеры">📷
+        <select id="o3cam"><option value="orbit">Облёт</option><option value="top">Сверху</option><option value="walk">Изнутри (ходьба)</option></select>
+      </label>
+      <label title="Как показывать стены">🧱
         <select id="o3walls">
           <option value="full">Полные</option>
           <option value="glass">Полупрозрачные</option>
@@ -45,25 +53,30 @@
           <option value="none">Без стен</option>
         </select>
       </label>
-      <label>Срез <input type="range" id="o3cut" min="0.2" max="2.5" step="0.1" value="1"><span id="o3cutv">1.0 м</span></label>
-      <label>Прозрачность <input type="range" id="o3op" min="0.1" max="0.8" step="0.05" value="0.3"></label>
-      <label>Камера
-        <select id="o3cam"><option value="orbit">Облёт</option><option value="top">Сверху</option><option value="walk">Изнутри (ходьба)</option></select>
-      </label>
-      <label>Комната <select id="o3room"></select></label>
-      <button id="o3go">Встать в комнату</button>
-      <button id="o3tour">Автообход</button>
-      <label class="chk"><input type="checkbox" id="o3ceil" checked> потолок</label>
-      <label class="chk"><input type="checkbox" id="o3night"> вечер (лампы)</label>
-      <label class="chk"><input type="checkbox" id="o3pick" checked> выбор кликом</label>
-      <label class="chk"><input type="checkbox" id="o3frame" checked> рамка выбора</label>
-      <button id="o3lamps">Выключить свет</button>
-      <label>Яркость ламп <input type="range" id="o3lamp" min="0.3" max="2.5" step="0.1" value="1"></label>
-      <label title="0 = восток, 90 = юг, 180 = запад, 270 = север">Солнце <input type="range" id="o3sun" min="0" max="355" step="5" value="45"></label>
-      <button id="o3sunAuto">Авто</button>
-      <button id="o3fit">Вписать</button>
-      <span id="o3help"></span>
+      <span class="sep"></span>
+      <label title="Выбор комнаты">🏠 <select id="o3room"></select></label>
+      <button id="o3go" title="Встать в комнату (лучший угол)">🚶</button>
+      <span id="o3corners" title="Встать в угол комнаты"></span>
+      <span class="sep"></span>
+      <button id="o3tour" title="Автообход комнат">🎬</button>
+      <button id="o3fit" title="Вписать весь план (F)">⤢</button>
+      <button id="o3lamps" title="Включить свет">💡</button>
+      <label class="tbtn" title="Вечер (лампы)"><input type="checkbox" id="o3night">🌙</label>
+      <details class="dd3">
+        <summary title="Настройки 3D: срез, прозрачность, свет, солнце, потолок">⚙</summary>
+        <div class="ddp">
+          <label>Срез <input type="range" id="o3cut" min="0.2" max="2.5" step="0.1" value="1"><span id="o3cutv">1.0 м</span></label>
+          <label>Прозрачность <input type="range" id="o3op" min="0.1" max="0.8" step="0.05" value="0.3"></label>
+          <label>Яркость ламп <input type="range" id="o3lamp" min="0.3" max="2.5" step="0.1" value="1"></label>
+          <label title="0 = восток, 90 = юг, 180 = запад, 270 = север">Солнце <input type="range" id="o3sun" min="0" max="355" step="5" value="45"> <button id="o3sunAuto" title="Авто-направление по окнам">Авто</button></label>
+          <label class="chk"><input type="checkbox" id="o3ceil" checked> потолок</label>
+          <label class="chk"><input type="checkbox" id="o3pick" checked> выбор кликом</label>
+          <label class="chk"><input type="checkbox" id="o3frame" checked> рамка выбора</label>
+          <span id="o3help"></span>
+        </div>
+      </details>
     </div>
+
     <div id="status"></div>
     <button id="btnL" class="edge" title="Скрыть / показать левую панель">‹</button>
     <button id="btnR" class="edge" title="Скрыть / показать правую панель">›</button>

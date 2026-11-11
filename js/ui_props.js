@@ -70,7 +70,8 @@
 
     const CF = FP.conflicts(f);
     if (CF.size) {                                                   // список конфликтов расстановки
-      root.appendChild(el('h4', '', '⚠ Проблемы расстановки (' + CF.size + ')'));
+      root.appendChild(el('h4', 'warn', '⚠ Проблемы расстановки (' + CF.size + ')'));
+
       const lc = el('div', 'list');
       CF.forEach((arr, id) => { const m = f.furniture.find(q => q.id === id); if (m) lc.appendChild(btn(m.name + ' — ' + arr[0].text + (arr.length > 1 ? ' (+' + (arr.length - 1) + ')' : ''), () => FP.select('furniture', id))); });
       root.appendChild(lc);
@@ -241,7 +242,15 @@
     root.appendChild(el('div', 'stat', '<span>Стена</span><b>' + FP.wallLabel(o.wallId) + '</b>'));
     root.appendChild(row('Тип', selIn([['door', 'Дверь'], ['window', 'Окно'], ['gap', 'Проём (без двери)']], o.kind, v => { o.kind = v; const d = FP.opDefaults(v); o.h = d.h; o.sill = d.sill; o.width = d.width; })));
     root.appendChild(row('Смещение, м', numIn(o, 'offset', { min: 0, cb: () => { delete o.k; } })));
+
     root.appendChild(row('Ширина, м', numIn(o, 'width', { min: .2 })));
+    { const wl = FP.getWalls(FP.floor()).find(q => q.id === o.wallId);       // длина стены, на которой стоит проём
+      if (wl) {
+        const WL = FP.wlen(wl);
+        root.appendChild(el('div', 'stat', '<span>Длина стены</span><b>' + WL.toFixed(2) + ' м</b>'));
+        if (o.width > WL - .05) root.appendChild(el('div', 'hint warn', '⚠ Проём занимает почти всю стену: он не двигается и не может стать шире. Увеличьте комнату (ширину/глубину) или уменьшите проём.'));
+      } }
+
     const hh = { h: o.h != null ? o.h : FP.opDefaults(o.kind).h, sill: o.sill != null ? o.sill : FP.opDefaults(o.kind).sill };
     root.appendChild(row('Высота проёма, м', numIn(Object.assign(o, { h: hh.h }), 'h', { min: .3 })));
     if (o.kind === 'window') root.appendChild(row('Высота подоконника', numIn(Object.assign(o, { sill: hh.sill }), 'sill', { min: 0 })));
@@ -267,7 +276,9 @@
 
     root.appendChild(el('h3', '', 'Мебель'));
     const cfl = FP.conflicts(FP.floor()).get(m.id);
-    if (cfl) { const wr = el('div', 'hint', '⚠ ' + cfl.map(c => c.text).join('; ')); wr.style.color = '#b3261e'; root.appendChild(wr); }
+
+    if (cfl) root.appendChild(el('div', 'hint warn', '⚠ ' + cfl.map(c => c.text).join('; ')));
+
     root.appendChild(row('Название', textIn(m, 'name')));
 
     root.appendChild(row('Тип', selIn(Object.keys(FP.LIB.models).map(k => [k, FP.LIB.models[k].name]).sort((a, b) => a[1].localeCompare(b[1], 'ru')), m.kind, v => { m.kind = v; })));

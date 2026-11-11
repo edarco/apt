@@ -20,7 +20,25 @@
     parent.appendChild(row(label, i));
     const pal = el('div', 'pal'); (palette || FP.PALETTE).forEach(c => { const s = el('i'); s.style.background = c; s.title = c; s.onclick = () => edit(() => { obj[key] = c; }); pal.appendChild(s); }); parent.appendChild(pal);
   }
+
   const btn = (text, fn, cls) => { const b = el('button', cls || '', text); b.onclick = fn; return b; };
 
-  FP.uiForm = { el, row, edit, numIn, textIn, selIn, chkIn, colorBlock, btn };
+  // выпадающее меню: items = [[текст, функция], ...], строка '-' = разделитель
+  function menu(label, items, title) {
+    const w = el('div', 'dd'), b = el('button', '', label), l = el('div', 'ddl'); if (title) b.title = title; l.hidden = true;
+    items.forEach(it => {
+      if (it === '-') { l.appendChild(el('hr')); return; }
+      const x = el('button', '', it[0]); x.onclick = () => { l.hidden = true; it[1](); }; l.appendChild(x);
+    });
+    b.onclick = e => {
+      e.stopPropagation(); const was = l.hidden;
+      document.querySelectorAll('.ddl').forEach(q => { q.hidden = true; });
+      if (was) { const r = b.getBoundingClientRect(); l.style.left = Math.max(4, Math.min(r.left, innerWidth - 230)) + 'px'; l.style.top = (r.bottom + 2) + 'px'; l.hidden = false; }
+    };
+    w.appendChild(b); w.appendChild(l); return w;
+  }
+  document.addEventListener('click', () => document.querySelectorAll('.ddl').forEach(q => { q.hidden = true; }));
+
+  FP.uiForm = { el, row, edit, numIn, textIn, selIn, chkIn, colorBlock, btn, menu };
+
 })();
