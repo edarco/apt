@@ -54,15 +54,27 @@
     root.appendChild(row('Размеры на плане', chkIn(s.dims, v => { s.dims = v; })));
 
     root.appendChild(row('Текстура пола на плане', chkIn(!!s.planTex, v => { s.planTex = v; })));
-    const ds = f.openings.filter(o => o.kind === 'door');
+    const ds = f.openings.filter(o => o.kind === 'door' && !o.locked);
     if (ds.length) { const bd = el('div', 'btns'); bd.appendChild(btn(ds.every(o => o.open) ? 'Закрыть двери' : 'Открыть двери', () => FP.setDoors(ds, !ds.every(o => o.open)))); root.appendChild(bd); }
 
     root.appendChild(row('Мебель с комнатой', chkIn(s.moveFurn, v => { s.moveFurn = v; })));
+    root.appendChild(row('Подсвечивать наложения', chkIn(s.showConf !== false, v => { s.showConf = v; })));
+    root.appendChild(row('Не ставить друг на друга', chkIn(s.noOverlap !== false, v => { s.noOverlap = v; })));
+
     const b = el('div', 'btns'); b.appendChild(btn('+ Комната', () => FP.addRoom())); b.appendChild(btn('+ Стена', () => FP.addWall())); root.appendChild(b);
 
     const bg = el('div', 'btns');
     bg.appendChild(btn('Комнаты из контуров стен', () => { const n = FP.roomsFromWalls(); alert(n ? 'Создано комнат: ' + n : 'Замкнутых контуров из свободных стен не найдено'); }));
+
     root.appendChild(bg);
+
+    const CF = FP.conflicts(f);
+    if (CF.size) {                                                   // список конфликтов расстановки
+      root.appendChild(el('h4', '', '⚠ Проблемы расстановки (' + CF.size + ')'));
+      const lc = el('div', 'list');
+      CF.forEach((arr, id) => { const m = f.furniture.find(q => q.id === id); if (m) lc.appendChild(btn(m.name + ' — ' + arr[0].text + (arr.length > 1 ? ' (+' + (arr.length - 1) + ')' : ''), () => FP.select('furniture', id))); });
+      root.appendChild(lc);
+    }
 
     root.appendChild(el('h4', '', 'Площади'));
 
@@ -96,9 +108,10 @@
     root.appendChild(b);
   }
   function polyBlock(root, r) {
-    root.appendChild(el('h4', '', 'Контур (вершины, м)'));
+    root.appendChild(el('h4', '', 'Вершины: координаты X, Y на плане, м'));
     r.poly.forEach((q, i) => {
       const d = el('div', 'row'); d.appendChild(el('span', '', 'Вершина ' + (i + 1)));
+      d.onmouseenter = () => FP.v2.hl({ i }); d.onmouseleave = () => FP.v2.hl(null);
       [0, 1].forEach(k => {
         const inp = el('input'); inp.type = 'number'; inp.step = .01; inp.value = +q[k].toFixed(3);
         inp.onchange = () => { const v = parseFloat(inp.value); if (isNaN(v)) return; edit(() => { q[k] = v; FP.syncBox(r); }); };
@@ -107,6 +120,20 @@
       const x = btn('✕', () => { if (r.poly.length > 3) edit(() => FP.polyRemove(r, i)); }, 'danger'); x.title = 'Удалить вершину'; d.appendChild(x);
       root.appendChild(d);
     });
+
+    root.appendChild(el('h4', '', 'Длины сторон, м (между вершинами)'));
+    r.poly.forEach((a, i) => {
+      const j = (i + 1) % r.poly.length, b = r.poly[j], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const inp = el('input'); inp.type = 'number'; inp.step = .01; inp.min = .05; inp.value = +L.toFixed(3);
+      inp.onchange = () => {
+        const v = parseFloat(inp.value); if (!(v >= .05) || L < 1e-6) return;
+        edit(() => { const k = v / L; b[0] = a[0] + (b[0] - a[0]) * k; b[1] = a[1] + (b[1] - a[1]) * k; FP.syncBox(r); });   // сдвигаем вершину j вдоль стороны
+      };
+      const d = el('div', 'row'); d.appendChild(el('span', '', 'Сторона ' + (i + 1) + ': В' + (i + 1) + '→В' + (j + 1))); d.appendChild(inp);
+      d.onmouseenter = () => FP.v2.hl({ i }); d.onmouseleave = () => FP.v2.hl(null);
+      root.appendChild(d);
+    });
+
     root.appendChild(el('p', 'hint', 'На плане: тяните квадраты-вершины, кружок «+» на стороне добавляет вершину, Shift+клик по вершине удаляет её.'));
   }
   function mergeBlock(root, r) {
@@ -218,8 +245,15 @@
     const hh = { h: o.h != null ? o.h : FP.opDefaults(o.kind).h, sill: o.sill != null ? o.sill : FP.opDefaults(o.kind).sill };
     root.appendChild(row('Высота проёма, м', numIn(Object.assign(o, { h: hh.h }), 'h', { min: .3 })));
     if (o.kind === 'window') root.appendChild(row('Высота подоконника', numIn(Object.assign(o, { sill: hh.sill }), 'sill', { min: 0 })));
+    if (o.kind === 'window') {
+      root.appendChild(matRow('Подоконник: материал', 'sill', FP.sillSpec(o), s => { o.sillFin = s; }, 'Подоконник'));
+      root.appendChild(row('Вынос в комнату, м', numIn(Object.assign(o, { sillIn: o.sillIn != null ? o.sillIn : .1 }), 'sillIn', { min: 0 })));
+      root.appendChild(row('Толщина доски, м', numIn(Object.assign(o, { sillT: o.sillT || .035 }), 'sillT', { min: .01 })));
+    }
+
     if (o.kind === 'door') {
       root.appendChild(row('Открыта', chkIn(!!o.open, v => { o.open = v; })));
+      root.appendChild(row('Зафиксирована (не менять кнопкой «двери»)', chkIn(!!o.locked, v => { o.locked = v; })));
       root.appendChild(row('Входная дверь', chkIn(!!o.main, v => { o.main = v; })));
       root.appendChild(matRow('Дверь', 'door', FP.doorSpec(o), s => { o.fin = s; }, 'Цвет / материал двери'));
       root.appendChild(row('Петли справа', chkIn(o.flip, v => { o.flip = v; })));
@@ -230,8 +264,12 @@
   }
 
   function furnP(root, m) {
+
     root.appendChild(el('h3', '', 'Мебель'));
+    const cfl = FP.conflicts(FP.floor()).get(m.id);
+    if (cfl) { const wr = el('div', 'hint', '⚠ ' + cfl.map(c => c.text).join('; ')); wr.style.color = '#b3261e'; root.appendChild(wr); }
     root.appendChild(row('Название', textIn(m, 'name')));
+
     root.appendChild(row('Тип', selIn(Object.keys(FP.LIB.models).map(k => [k, FP.LIB.models[k].name]).sort((a, b) => a[1].localeCompare(b[1], 'ru')), m.kind, v => { m.kind = v; })));
     root.appendChild(row('X, м', numIn(m, 'x'))); root.appendChild(row('Y, м', numIn(m, 'y')));
     root.appendChild(row('Ширина, м', numIn(m, 'width', { min: .05 }))); root.appendChild(row('Глубина, м', numIn(m, 'depth', { min: .05 }))); root.appendChild(row('Высота, м', numIn(m, 'height', { min: .01 })));
@@ -243,6 +281,7 @@
     root.appendChild(b);
     const b2 = el('div', 'btns'); b2.appendChild(btn('Отзеркалить', () => edit(() => { m.flipX = !m.flipX; }))); b2.appendChild(btn('Поменять ширину/глубину', () => edit(() => { [m.width, m.depth] = [m.depth, m.width]; }))); root.appendChild(b2);
     if (FP.isLamp(MM)) root.appendChild(row('Включён', chkIn(m.on !== false, v => { m.on = v; })));
+    if (MM && MM.doors) root.appendChild(row('Дверцы открыты', chkIn(!!m.open, v => { m.open = v; })));
     root.appendChild(row('Отделка', selIn([['auto', 'Авто (по типу)'], ['matte', 'Матовая краска'], ['gloss', 'Глянец / лак'], ['wood', 'Дерево'], ['fabric', 'Ткань'], ['leather', 'Кожа'], ['plastic', 'Пластик'], ['chrome', 'Металл (блеск)']], m.finish || 'auto', v => { m.finish = v; })));
     colorBlock(root, 'Цвет', m, 'color', FP.FPAL);
     if (MM && MM.parts.some(p => p.c === 'dw')) { if (!m.color2) m.color2 = '#6f5a44'; colorBlock(root, 'Каркас / ножки', m, 'color2', FP.FPAL); }

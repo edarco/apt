@@ -23,4 +23,38 @@
     i.onchange = () => { const r = new FileReader(); r.onload = () => { try { FP.addUserLib(JSON.parse(r.result)); FP.ui.buildLeft(); } catch (e) { alert('Не удалось прочитать библиотеку: ' + e.message); } }; r.readAsText(i.files[0]); };
     i.click();
   };
+
+  // ---------- импорт модели .glb ----------
+  FP.ui.glbImport = () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.glb,model/gltf-binary';
+    inp.onchange = () => {
+      const file = inp.files[0]; if (!file) return;
+      const rd = new FileReader();
+      rd.onload = () => FP.glb.add(rd.result).then(info => glbDialog(file.name.replace(/\.[^.]+$/, ''), info), e => alert('Не удалось прочитать GLB: ' + (e.message || e)));
+      rd.readAsArrayBuffer(file);
+    };
+    inp.click();
+  };
+  function glbDialog(name, info) {
+    const k = Math.max(info.w, info.h, info.d) > 20 ? .01 : 1;           // если модель в сантиметрах: переводим в метры
+    const dlg = document.createElement('dialog'), form = el('div'), G = {};
+    dlg.appendChild(el('h3', '', 'Импорт модели GLB')); form.style.minWidth = '320px';
+    G.name = el('input'); G.name.type = 'text'; G.name.value = name;
+    G.cat = el('input'); G.cat.type = 'text'; G.cat.value = 'Мои';
+    ['w', 'd', 'h'].forEach(q => { G[q] = el('input'); G[q].type = 'number'; G[q].step = .01; G[q].min = .01; G[q].value = +(info[q] * k).toFixed(2); });
+    G.color = el('input'); G.color.type = 'color'; G.color.value = '#b99570';
+    [['Название', G.name], ['Группа каталога', G.cat], ['Ширина, м', G.w], ['Глубина, м', G.d], ['Высота, м', G.h], ['Цвет на плане 2D', G.color]].forEach(a => form.appendChild(row(a[0], a[1])));
+    dlg.appendChild(form);
+    const b = el('div', 'dlgBtns'), ok = el('button', '', 'Добавить'), no = el('button', '', 'Отмена');
+    const close = () => { dlg.close(); dlg.remove(); };
+    ok.onclick = () => {
+      const w = +G.w.value, d = +G.d.value, h = +G.h.value; if (!(w > 0 && d > 0 && h > 0)) return;
+      const nm = G.name.value || 'Модель', cat = G.cat.value || 'Мои';
+      FP.addUserLib({ models: { [info.id]: { name: nm, w, d, h, parts: [], glb: true } }, catalog: [{ cat, items: [[info.id, nm, w, d, h, G.color.value]] }] });
+      close(); FP.ui.buildLeft();
+    };
+    no.onclick = close; b.appendChild(ok); b.appendChild(no); dlg.appendChild(b);
+    document.body.appendChild(dlg); dlg.showModal();
+  }
+
 })();

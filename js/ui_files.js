@@ -77,7 +77,7 @@
   function refreshTop() {
     $('projName').value = FP.data.name;
     const s = $('floorSel'); s.innerHTML = ''; FP.data.floors.forEach((f, i) => { const o = el('option'); o.value = i; o.textContent = f.name; s.appendChild(o); }); s.value = FP.fi;
-    const ds = FP.floor().openings.filter(o => o.kind === 'door'); $('doorsBtn').textContent = (ds.length && ds.every(o => o.open)) ? 'Закрыть двери' : 'Открыть двери';
+    const ds = FP.floor().openings.filter(o => o.kind === 'door' && !o.locked); $('doorsBtn').textContent = (ds.length && ds.every(o => o.open)) ? 'Закрыть двери' : 'Открыть двери';
   }
   FP.ui.refreshTop = refreshTop;
 
@@ -115,7 +115,7 @@
       $('btnFs').textContent = fs ? '✕' : '⛶';
     });
 
-    $('doorsBtn').onclick = () => { const ds = FP.floor().openings.filter(o => o.kind === 'door'); if (ds.length) FP.setDoors(ds, !ds.every(o => o.open)); };
+    $('doorsBtn').onclick = () => { const ds = FP.floor().openings.filter(o => o.kind === 'door' && !o.locked); if (ds.length) FP.setDoors(ds, !ds.every(o => o.open)); };
     $('helpClose').onclick = () => $('helpDlg').close();
     // тема
     const applyTheme = t => { document.documentElement.dataset.theme = t; FP.v2 && FP.v2.draw(); try { localStorage.setItem('fp_theme', t); } catch (e) {} };

@@ -80,12 +80,19 @@
     delete d.models;                                  // свои модели мебели, использованные в проекте, едут вместе с файлом
     const usedM = {}; d.floors.forEach(f => f.furniture.forEach(m => { if (FP.userLib.models[m.kind]) usedM[m.kind] = FP.userLib.models[m.kind]; }));
     if (Object.keys(usedM).length) d.models = usedM;
+    delete d.glbs;
+    if (FP.glb && Object.keys(usedM).length) { const gl = FP.glb.pack(Object.keys(usedM)); if (gl) d.glbs = gl; }   // сами .glb внутри JSON проекта
     return JSON.stringify(d, (k, v) => typeof v === 'number' ? +v.toFixed(4) : v, 2);
   };
   FP.load = function (text) {
     let d; try { d = JSON.parse(text); } catch (e) { return false; }
     if (!d || !Array.isArray(d.floors)) return false;
-    if (d.models) FP.mergeModels(d.models);
+    if (d.models) {
+      FP.mergeModels(d.models);
+      Object.keys(d.models).forEach(k => { if (FP.LIB.models[k]) FP.userLib.models[k] = FP.LIB.models[k]; });     // чтобы модели пережили перезагрузку страницы
+      try { localStorage.setItem('fp_userlib', JSON.stringify(FP.userLib)); } catch (e) {}
+    }
+    if (d.glbs && FP.glb) FP.glb.unpack(d.glbs); delete d.glbs;
     FP.data = FP.normalize(d); FP.fi = 0; FP.sel = null; FP.resetHistory(); FP.changed();
     return true;
   };
@@ -235,7 +242,7 @@
     FP.snap(); const f = FP.floor();
     const x = f.rooms.length ? Math.max(...f.rooms.map(r => r.x + r.width)) + (FP.inner() ? f.thickness : 0) : 0,
       y = f.rooms.length ? f.rooms[0].y : 0;
-    const r = { id: FP.uid(), name: 'Комната ' + (f.rooms.length + 1), x, y, width: 3, depth: 3, material: 'oak', color: FP.PALETTE[f.rooms.length % FP.PALETTE.length] };
+    const r = { id: FP.uid(), name: 'Комната ' + (f.rooms.length + 1), x, y, width: 3, depth: 3, material: 'oak', color: '#c19a6b', floor: { m: 'lam_oak_nat', c: null } };
     f.rooms.push(r); FP.select('room', r.id); FP.changed();
   };
   FP.addWall = function () {
@@ -268,7 +275,7 @@
   };
 
   // ---------- двери: открыть/закрыть ----------
-  FP.setDoors = function (list, v) { FP.snap(); list.forEach(o => { o.open = v; }); FP.changed(); };
+  FP.setDoors = function (list, v) { FP.snap(); list.forEach(o => { if (!o.locked) o.open = v; }); FP.changed(); };
   FP.nearestDoor = function (x, y, R) {
     const f = FP.floor(), ws = FP.getWalls(f); let best = null, bd = R;
     f.openings.forEach(o => {
@@ -282,7 +289,7 @@
     if (so && FP.sel.type === 'opening' && so.kind === 'door') o = so;
     else { const c = FP.view === '3d' && FP.v3.focus(); if (c) o = FP.nearestDoor(c[0], c[1], 1.8); }
     if (o) FP.setDoors([o], !o.open);
-    else { const ds = f.openings.filter(q => q.kind === 'door'); FP.setDoors(ds, !ds.some(q => q.open)); }   // нет выбора и рядом нет двери: все двери
+    else { const ds = f.openings.filter(q => q.kind === 'door' && !q.locked); FP.setDoors(ds, !ds.some(q => q.open)); }   // нет выбора и рядом нет двери: все двери
   };
 
   FP.duplicate = function () {

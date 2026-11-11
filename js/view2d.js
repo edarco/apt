@@ -6,7 +6,7 @@
   const DARK  = { bg: '#3E3838', g1: '#5f636f', g2: '#555965', wall: '#010101', lblBg: 'rgba(37,38,43,.92)', lblTx: '#eee', room1: '#eee', room2: '#bbb', door: '#b8b6b6' };
   let C = LIGHT; const theme = () => { const m = V.canvasTheme || 'auto'; return (m === 'dark' || (m === 'auto' && document.documentElement.dataset.theme === 'dark')) ? DARK : LIGHT; };
 
-  let W = 1, H = 1, dpr = 1, drag = null, tmp = null, hover = null, meas = null, space = false, rafP = 0;
+  let W = 1, H = 1, dpr = 1, drag = null, tmp = null, hover = null, meas = null, space = false, rafP = 0, CF = new Map(), note = '';
   const sx = x => V.ox + x * V.s, sy = y => V.oy + y * V.s, wx = p => (p - V.ox) / V.s, wy = p => (p - V.oy) / V.s;
   const set = () => FP.data.settings;
   const P = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
@@ -41,6 +41,8 @@
   };
   V.panBy = function (dx, dy) { V.ox += dx; V.oy += dy; V.draw(); };
 
+  let hl = null; V.hl = h => { hl = h; V.draw(); };      // подсветка вершины/стороны i из панели свойств
+
   // ---------- хит-тесты ----------
   function segProj(px, py, w) {
     const L = FP.wlen(w); if (L < 1e-6) return { d: Math.hypot(px - w.x1, py - w.y1), t: 0 };
@@ -66,9 +68,8 @@
       if (Math.abs(al) <= o.width / 2 + tol && Math.abs(ac) <= Math.max(w.t / 2, .1) + tol) return { type: 'opening', id: o.id };
     }
     for (let i = f.furniture.length - 1; i >= 0; i--) {
-      const m = f.furniture[i], a = -(m.rotation || 0) * Math.PI / 180, dx = x - m.x, dy = y - m.y;
-      const lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a);
-      if (Math.abs(lx) <= Math.max(m.width / 2, 8 / V.s) && Math.abs(ly) <= Math.max(m.depth / 2, 8 / V.s)) return { type: 'furniture', id: m.id };
+      const m = f.furniture[i];
+      if (FP.footRects(m).some(q => { const dx = x - q.cx, dy = y - q.cy; return Math.abs(dx * q.ux + dy * q.uy) <= Math.max(q.hl, 8 / V.s) && Math.abs(-dx * q.uy + dy * q.ux) <= Math.max(q.ht, 8 / V.s); })) return { type: 'furniture', id: m.id };
     }
     for (const w of f.walls) if (segProj(x, y, w).d <= Math.max((w.thickness || f.thickness) / 2, tol)) return { type: 'wall', id: w.id };
     let best = null, ba = 1e9;
@@ -140,8 +141,15 @@
     const round = (M && (M.plan === 'round' || M.plan === 'oval')) || m.kind === 'plant' || m.kind === 'roundtable';
     const hi = M && (M.ceil || (m.elev != null ? m.elev : (M.elev || 0)) > 0.3);       // навесное / потолочное: пунктир
     c.fillStyle = m.color || '#bbb'; c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = 1; c.globalAlpha = m.kind === 'rug' ? .75 : hi ? .55 : 1;
+
     if (hi) c.setLineDash([4, 3]);
-    c.beginPath(); if (round) c.ellipse(0, 0, w / 2, d / 2, 0, 0, 7); else c.rect(-w / 2, -d / 2, w, d); c.fill(); c.globalAlpha = 1; c.stroke(); c.setLineDash([]);
+    c.beginPath();
+    if (round) c.ellipse(0, 0, w / 2, d / 2, 0, 0, 7);
+    else if (M && M.outline) { const kx = m.width / M.w, kz = m.depth / M.d; M.outline.forEach((q, i) => { const X = q[0] * kx * s, Y = q[1] * kz * s; i ? c.lineTo(X, Y) : c.moveTo(X, Y); }); c.closePath(); }   // Г-образный диван
+    else c.rect(-w / 2, -d / 2, w, d);
+    c.fill(); c.globalAlpha = 1; c.stroke(); c.setLineDash([]);
+    if (CF.has(m.id)) { c.fillStyle = 'rgba(224,32,31,.28)'; c.fill(); c.strokeStyle = '#e0201f'; c.lineWidth = 2.5; c.stroke(); }   // конфликт: красным
+
     c.strokeStyle = 'rgba(0,0,0,.35)';
     const E = (x, y, rx, ry) => { c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 7); c.stroke(); };
     const R = (x, y, a, b) => c.strokeRect(x, y, a, b);
@@ -152,6 +160,7 @@
         else { R(-w / 2 + w * .06, -d / 2 + d * .04, w * .4, d * .14); R(w / 2 - w * .46, -d / 2 + d * .04, w * .4, d * .14); }
         Ln(-w / 2, -d / 2 + d * .3, w / 2, -d / 2 + d * .3); break;
       case 'sofa': case 'armchair': R(-w / 2, -d / 2, w, d * .25); break;
+      case 'sofa_l': R(-w / 2, -d / 2, w, d * .126); break;
       case 'chair': Ln(-w / 2, -d / 2 + d * .2, w / 2, -d / 2 + d * .2); break;
       case 'bath': R(-w / 2 + w * .1, -d / 2 + d * .08, w * .8, d * .84); break;
       case 'sink': E(0, 0, w * .32, d * .3); break;
@@ -182,7 +191,7 @@
   function finishPoly() {
     if (!tmp || !tmp.pts || tmp.pts.length < 3) { tmp = null; V.draw(); return; }
     FP.snap(); const f = FP.floor();
-    const r = { id: FP.uid(), name: 'Комната ' + (f.rooms.length + 1), x: 0, y: 0, width: 1, depth: 1, poly: tmp.pts.map(q => q.slice()), material: 'oak', color: FP.PALETTE[f.rooms.length % FP.PALETTE.length] };
+    const r = { id: FP.uid(), name: 'Комната ' + (f.rooms.length + 1), x: 0, y: 0, width: 1, depth: 1, poly: tmp.pts.map(q => q.slice()), material: 'oak', color: '#c19a6b', floor: { m: 'lam_oak_nat', c: null } };
     FP.fixPoly(r); f.rooms.push(r); tmp = null; V.setTool('select'); FP.select('room', r.id); FP.changed();
   }
 
@@ -199,8 +208,11 @@
     C = theme(); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
     const f = FP.floor(), s = V.s, walls = FP.getWalls(f), sel = FP.sel, so = FP.selObj();
     const MI = FP.mergeInfo(f, walls), MA = FP.mergeAreas(f, walls), GC = {};
+
     f.rooms.forEach(q => { if (q.merge) GC[q.merge] = (GC[q.merge] || 0) + 1; });
+    CF = set().showConf === false ? new Map() : FP.conflicts(f, walls);
     const step = s >= 90 ? .25 : s >= 35 ? .5 : 1; c.lineWidth = 1;
+
     for (let x = Math.floor(wx(0) / step) * step; x <= wx(W); x += step) { c.strokeStyle = Math.abs(x - Math.round(x)) < 1e-6 ? C.g1 : C.g2; c.beginPath(); c.moveTo(Math.round(sx(x)) + .5, 0); c.lineTo(Math.round(sx(x)) + .5, H); c.stroke(); }
     for (let y = Math.floor(wy(0) / step) * step; y <= wy(H); y += step) { c.strokeStyle = Math.abs(y - Math.round(y)) < 1e-6 ? C.g1 : C.g2; c.beginPath(); c.moveTo(0, Math.round(sy(y)) + .5); c.lineTo(W, Math.round(sy(y)) + .5); c.stroke(); }
 
@@ -264,6 +276,13 @@
         if (so.poly) {
           polyPath(so.poly); c.stroke(); c.setLineDash([]);
           so.poly.forEach((q, i) => { const b = so.poly[(i + 1) % so.poly.length]; c.beginPath(); c.arc(sx((q[0] + b[0]) / 2), sy((q[1] + b[1]) / 2), 4, 0, 7); c.stroke(); c.beginPath(); c.rect(sx(q[0]) - 5, sy(q[1]) - 5, 10, 10); c.fill(); c.stroke(); });
+          so.poly.forEach((q, i) => lbl('В' + (i + 1), sx(q[0]) + 16, sy(q[1]) - 14));   // номера вершин
+          if (hl && so.poly[hl.i]) {                                                    // подсветка выбранной в панели вершины и стороны
+            const a = so.poly[hl.i], b = so.poly[(hl.i + 1) % so.poly.length];
+            c.strokeStyle = '#1e6fbf'; c.fillStyle = '#1e6fbf'; c.lineWidth = 5;
+            c.beginPath(); c.moveTo(sx(a[0]), sy(a[1])); c.lineTo(sx(b[0]), sy(b[1])); c.stroke();
+            c.beginPath(); c.arc(sx(a[0]), sy(a[1]), 8, 0, 7); c.fill(); c.lineWidth = 2;
+          }
         } else {
           c.strokeRect(sx(so.x), sy(so.y), so.width * s, so.depth * s); c.setLineDash([]);
           [[so.x, so.y], [so.x + so.width, so.y], [so.x, so.y + so.depth], [so.x + so.width, so.y + so.depth]].forEach(q => { c.beginPath(); c.rect(sx(q[0]) - 5, sy(q[1]) - 5, 10, 10); c.fill(); c.stroke(); });
@@ -305,7 +324,8 @@
       lbl(Math.hypot(meas.b.x - meas.a.x, meas.b.y - meas.a.y).toFixed(3) + ' м', sx((meas.a.x + meas.b.x) / 2), sy((meas.a.y + meas.b.y) / 2) - 12);
     }
     const st = FP.$('status');
-    st.textContent = `x ${(V.mx || 0).toFixed(2)}  y ${(V.my || 0).toFixed(2)} м · сетка ${set().snap} м · комнат ${f.rooms.length} · площадь ${FP.unionArea(f.rooms).toFixed(2)} м²`;
+
+    st.textContent = (note ? note + ' · ' : '') + `x ${(V.mx || 0).toFixed(2)}  y ${(V.my || 0).toFixed(2)} м · сетка ${set().snap} м · комнат ${f.rooms.length} · площадь ${FP.unionArea(f.rooms).toFixed(2)} м²` + (CF.size ? ` · ⚠ конфликтов: ${CF.size}` : '');
   };
 
   // ---------- мышь ----------
@@ -471,12 +491,21 @@
     if (drag.mode === 'draw') {
       const w = Math.abs(tmp.x1 - tmp.x0), h = Math.abs(tmp.y1 - tmp.y0);
       if (w >= .3 && h >= .3) {
-        FP.snap(); const f = FP.floor(), r = { id: FP.uid(), name: 'Комната ' + (f.rooms.length + 1), x: Math.min(tmp.x0, tmp.x1), y: Math.min(tmp.y0, tmp.y1), width: w, depth: h, material: 'oak', color: FP.PALETTE[f.rooms.length % FP.PALETTE.length] };
+        FP.snap(); const f = FP.floor(), r = { id: FP.uid(), name: 'Комната ' + (f.rooms.length + 1), x: Math.min(tmp.x0, tmp.x1), y: Math.min(tmp.y0, tmp.y1), width: w, depth: h, material: 'oak', color: '#c19a6b', floor: { m: 'lam_oak_nat', c: null } };
         f.rooms.push(r); FP.select('room', r.id); FP.changed();
       }
       tmp = null;
     } else if (drag.mode === 'pan') cv.style.cursor = (V.tool === 'pan' || V.lock) ? 'grab' : 'default';
-    else if (drag.moved) FP.changed();
+    else if (drag.moved) {
+      if (drag.mode === 'move' && drag.type === 'furniture' && set().noOverlap !== false) {   // запрет наложения: вернуть на прежнее место
+        const o = FP.selObj(), bad = o ? FP.conflicts(FP.floor()).get(o.id) : null;
+        if (bad && bad.length) {
+          o.x = drag.o.x; o.y = drag.o.y; o.rotation = drag.o.rotation;
+          note = '⛔ Сюда нельзя: ' + bad[0].text; setTimeout(() => { note = ''; V.draw(); }, 3000);
+        }
+      }
+      FP.changed();
+    }
     drag = null; V.draw(); FP.ui && FP.ui.props();
   });
   cv.addEventListener('dblclick', e => {

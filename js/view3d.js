@@ -9,6 +9,9 @@
 
   let hemi;
   let env = null, dome = null, fill = null, envMats = null, skyTex = {}, doors = [], selH = null, pick3 = null, updSel = false, lampLights = [];
+
+  let fdoors = []; const fAng = new Map(), FD_A = 100 * Math.PI / 180;     // дверцы мебели: список, текущие углы, угол открытия
+
   const dAng = new Map(), DOOR_A = 82 * Math.PI / 180;
   const vel = { x: 0, z: 0 }; let bobT = 0;
   const keys = {}, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -69,6 +72,16 @@
       uvFace(m.geometry, 5, (u, v) => [s + (1 - u) * len, a + v * (b - a)]);
       root.add(m); m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), edgeMat));
     });
+  }
+
+  // подоконник: выступает в комнату на o.sillIn (по умолчанию 10 см), наружу на 3 см; материал o.sillFin, толщина o.sillT
+  function sill(w, p, ux, uy, ang) {
+    const o = p.o, sp = FP.sillSpec(o), a = o.sillIn != null ? o.sillIn : .1, b = .03, T = o.sillT || .035, len = p.e - p.s + .08, dep = w.t + a + b, pos = FP.openPos(w, o);
+    const side = mat(FP.MAT.eff(sp)), topM = fmat(sp, false);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, T, dep), [side, side, topM, side, side, side]);
+    uvFace(m.geometry, 2, (u, v) => [u * len, v * dep]);              // текстура сверху в метрах
+    const s0 = (p.s + p.e) / 2, c = (a - b) / 2;                      // сдвиг доски в сторону комнаты
+    m.position.set(w.x1 + ux * s0 + pos.nx * c, p.z0 - T / 2, w.y1 + uy * s0 + pos.ny * c); m.rotation.y = ang; m.castShadow = m.receiveShadow = true; root.add(m); return m;
   }
 
   // плоская заливка многоугольника (пол / потолок): pts [[x,z]...], y — высота, dir = ±1 (куда смотрит нормаль), uv(X,Z) → текстурные координаты в метрах
@@ -155,6 +168,12 @@
    ['plastic', 'counter drawer_base sink wall_cab wall_cab2 tall_cab'],
    ['gloss', 'fridge fridge_sbs stove washer dishwasher oven microwave hood bath toilet basin shower shower_cabin shower_tile ac tv tv_desk worktop backsplash towel_rail radiator trash robot_vac']]
     .forEach(a => a[1].split(' ').forEach(k => { DEF_FIN[k] = a[0]; }));
+
+  'base_oven tall_oven cab_washer vanity boiler'.split(' ').forEach(k => { DEF_FIN[k] = 'plastic'; });
+  'hob_gas basin_wall toilet_wall beauty_cart shower_open shower_curtain'.split(' ').forEach(k => { DEF_FIN[k] = 'gloss'; });
+  'beauty_bed beauty_stool'.split(' ').forEach(k => { DEF_FIN[k] = 'leather'; });
+  'wall_books'.split(' ').forEach(k => { DEF_FIN[k] = 'wood'; });
+
   const finOf = m => (m.finish && m.finish !== 'auto' && STY[m.finish]) ? m.finish : (DEF_FIN[m.kind] || 'matte');
 
   const tcache = new Map();
@@ -211,8 +230,19 @@
     rgcache.set(key, g); return g;
   }
 
+  function buildGlb(m) {                                   // модель из .glb: подгоняется под размеры из плана
+    const g = new THREE.Group(), t = FP.glb.get(m.kind), rec = FP.glb.tpl.get(m.kind);
+    if (t && rec) { t.scale.set(m.width / (rec.w || 1), m.height / (rec.h || 1), m.depth / (rec.d || 1)); g.add(t); }
+    else g.add(box(m.width, m.height, m.depth, '#cccccc', 0, m.height / 2, 0, { transparent: true, opacity: .35, depthWrite: false }));   // пока грузится
+    return g;
+  }
+
   function buildModel(m, M) {
+    if (M.glb) return buildGlb(m);
     const g = new THREE.Group(), main = m.color || '#bbb', acc = m.color2 || TOK.dw, fin = finOf(m), on = m.on !== false, soft = fin === 'fabric' || fin === 'leather';
+
+    const pivots = {};                                       // оси вращения дверец
+
     M.parts.forEach(p => {
       const t = p.c || 'm', isMain = t === 'm' || t === 'd' || t === 'l', col = t === 'dw' ? acc : pcol(t, main);
       const st = STY[isMain ? fin : (TSTY[t] || 'gloss')], o = {}; let mesh, h;
@@ -228,7 +258,13 @@
       mesh.position.set(p.at[0], p.rot ? p.at[1] : p.at[1] + h / 2, p.at[2]);   // у повёрнутых деталей at = центр
       if (p.rot) mesh.rotation.set(p.rot[0] * Math.PI / 180, p.rot[1] * Math.PI / 180, p.rot[2] * Math.PI / 180);
       if (p.k) mesh.scale.set(p.k[0], p.k[1], p.k[2]);
-      mesh.castShadow = !p.op && !p.em; mesh.receiveShadow = true; g.add(mesh);
+      mesh.castShadow = !p.op && !p.em; mesh.receiveShadow = true;
+      const D = p.dr && M.doors && M.doors[p.dr];
+      if (D) {                                               // деталь дверцы: вращается вокруг петли
+        let pv = pivots[p.dr];
+        if (!pv) { pv = pivots[p.dr] = new THREE.Group(); pv.position.set(D.x, 0, D.z); g.add(pv); fdoors.push({ g: pv, m, id: p.dr, s: D.s }); }
+        mesh.position.x -= D.x; mesh.position.z -= D.z; pv.add(mesh);
+      } else g.add(mesh);
     });
     g.scale.set(m.width / M.w, m.height / M.h, m.depth / M.d);
     return g;
@@ -358,12 +394,14 @@
 
   function build() {
     clearRoot(); colRects = [];
-    hemi.intensity = opt.night ? .3 : .7; sun.intensity = opt.night ? .08 : .55; fill.intensity = opt.night ? .04 : .2;
+
+    hemi.intensity = opt.night ? .3 : .8; sun.intensity = opt.night ? .08 : .3; fill.intensity = opt.night ? .04 : .1;
+
     scene.background.set(opt.night ? '#1a2030' : '#e3e8ee');
     // яркость = экспозиция (вечером), цвета не «выжигаются»
     renderer.toneMapping = opt.night ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     renderer.toneMappingExposure = opt.night ? opt.lamp : 1;
-    doors = []; lampLights = [];
+    doors = []; lampLights = []; fdoors = [];
     const f = FP.floor(), st = FP.data.settings, walls = FP.getWalls(f), walking = isWalk();
     const wm = (walking && opt.walls !== 'glass') ? 'full' : opt.walls, cutH = wm === 'cut' ? opt.cut : undefined;
 
@@ -430,7 +468,8 @@
       }
 
       FP.pieces(f, walls, w, undefined).forEach(p => { // коллизии: всегда полные высоты
-        if ((p.type === 'wall' && p.z0 === 0) || p.type === 'block' || (p.type === 'door' && !(p.o && p.o.open))) {
+        // главная дверь блокирует проход всегда, даже открытая
+        if ((p.type === 'wall' && p.z0 === 0) || p.type === 'block' || (p.type === 'door' && (!(p.o && p.o.open) || (p.o && p.o.main)))) {
           let s = p.s, e = p.e; if (s <= .0005) s -= w.e1; if (e >= L - .0005) e += w.e2;
           colRects.push({ cx: w.x1 + ux * (s + e) / 2, cy: w.y1 + uy * (s + e) / 2, ux, uy, hl: (e - s) / 2, ht: w.t / 2 });
         }
@@ -451,7 +490,7 @@
           put(p.s, p.s + fq, p.z0, p.z1, T, fr); put(p.e - fq, p.e, p.z0, p.z1, T, fr);                    // рама
           put(p.s, p.e, p.z1 - fq, p.z1, T, fr); put(p.s, p.e, p.z0, p.z0 + fq, T, fr);
           put(mid - .02, mid + .02, p.z0, p.z1, .05, fr);                                                 // импост
-          put(p.s - .04, p.e + .04, p.z0 - .03, p.z0, w.t + .1, '#ffffff');                               // подоконник
+          { const sm = sill(w, p, ux, uy, ang); sm.userData.sel = curSel; }                              // подоконник
         } else if (p.type === 'door' && p.own) {
           const o = p.o, pos = FP.openPos(w, o), wd = p.e - p.s, hAlong = o.flip ? p.e : p.s, hgt = p.z1 - p.z0;
           const al = o.flip ? -1 : 1, sw = o.swing === -1 ? -1 : 1, dX = ux * al, dY = uy * al, nX = pos.nx * sw, nY = pos.ny * sw;
@@ -469,6 +508,11 @@
           [.2, hgt / 2, hgt - .2].forEach(y => part(new THREE.CylinderGeometry(.011, .011, .09, 8), hm, 0, y, 0));   // петли
           if (o.main) part(new THREE.CylinderGeometry(.008, .008, .02, 8), hm, wd / 2, 1.55 < hgt ? 1.55 : hgt - .3, T / 2 + .004).rotation.x = Math.PI / 2;   // глазок
           dg.userData.sel = curSel; root.add(dg); doors.push({ g: dg, o, th0, sgn });
+          if (o.main && walking) {                                  // подъезд за входной дверью: коробка, видимая изнутри
+            const SD = 2.2, k = w.t / 2 + SD / 2 + .01;
+            const sw = new THREE.Mesh(new THREE.BoxGeometry(wd + 2.4, f.height, SD), mat('#cfc9bb', { side: THREE.BackSide }));
+            sw.position.set(pos.cx - pos.nx * k, f.height / 2, pos.cy - pos.ny * k); sw.rotation.y = ang; root.add(sw);
+          }
           put(p.s - .04, p.s, 0, p.z1 + .04, w.t + .03, '#f4f1ea'); put(p.e, p.e + .04, 0, p.z1 + .04, w.t + .03, '#f4f1ea');   // наличники
           put(p.s - .04, p.e + .04, p.z1, p.z1 + .04, w.t + .03, '#f4f1ea');
         }
@@ -483,9 +527,8 @@
       g.position.set(m.x, yb, m.y); g.rotation.y = -(m.rotation || 0) * Math.PI / 180; if (m.flipX) g.scale.x *= -1; root.add(g);
 
       g.userData.fid = m.id; g.userData.sel = { type: 'furniture', id: m.id };
-      if (m.depth >= .12 && m.kind !== 'rug' && m.kind !== 'rug_round' && m.kind !== 'curtain' && !(M && M.ceil) && yb < 1.5 && yb + m.height > .3) {   // твёрдая мебель: не пройти насквозь
-        const ra = (m.rotation || 0) * Math.PI / 180;
-        colRects.push({ cx: m.x, cy: m.y, ux: Math.cos(ra), uy: Math.sin(ra), hl: m.width / 2, ht: m.depth / 2 });
+      if (m.depth >= .12 && m.kind !== 'rug' && m.kind !== 'rug_round' && m.kind !== 'curtain' && !/^(chair|office_chair|barstool|pouf|robot_vac)$/.test(m.kind) && !(M && M.ceil) && yb < 1.5 && yb + m.height > .3) {   // твёрдая мебель: не пройти насквозь
+        FP.footRects(m).forEach(q => colRects.push(q));
       }
 
       if (!(M && (M.ceil || M.wall)) && yb < .05 && m.height > .12 && m.kind !== 'rug' && m.kind !== 'rug_round') {   // мягкая тень под мебелью
@@ -518,6 +561,8 @@
     return { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, r: Math.max(x1 - x0, z1 - z0) / 2 + 1 };
   }
   V3.fit = function () { const b = bounds(); orbit.tx = b.cx; orbit.tz = b.cz; orbit.ty = 0; orbit.dist = b.r * 2.6 + 3; };
+
+  V3.invalidate = () => { needs = true; };           // пересобрать сцену (когда догрузился GLB)
 
   V3.fitView = function () {                       // «Вписать» в 3D: вернуться в облёт и показать весь план
     tour = null; FP.$('o3tour').classList.remove('on');
@@ -609,6 +654,12 @@
       if (Math.abs(a - t) > 1e-3) a += (t - a) * Math.min(1, dt * 7); else a = t;
       dAng.set(d.o.id, a); d.g.rotation.y = -(d.th0 + d.sgn * a);
     });
+
+    fdoors.forEach(d => {                                    // дверцы мебели
+      const k = d.m.id + d.id, t = d.m.open ? FD_A : 0; let a = fAng.has(k) ? fAng.get(k) : t;
+      if (Math.abs(a - t) > 1e-3) a += (t - a) * Math.min(1, dt * 6); else a = t;
+      fAng.set(k, a); d.g.rotation.y = d.s * a;
+    });
   }
 
   function loop(t) {
@@ -632,7 +683,8 @@
     scene = new THREE.Scene(); scene.background = new THREE.Color('#e3e8ee');
     edgeMat = new THREE.LineBasicMaterial({ color: 0x5c564b });
     camera = new THREE.PerspectiveCamera(60, 1, .1, 400);
-    hemi = new THREE.HemisphereLight(0xdfe9f5, 0x8a8f98, .55); scene.add(hemi);
+
+    hemi = new THREE.HemisphereLight(0xffffff, 0xe0e0e0, .55); scene.add(hemi);
 
     sun = new THREE.DirectionalLight(0xffffff, .85); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -.0003; sun.shadow.normalBias = .03; scene.add(sun, sun.target);
     fill = new THREE.DirectionalLight(0xdfe6f0, .3); scene.add(fill, fill.target);              // заполняющий свет с обратной стороны
@@ -704,6 +756,7 @@
           if (nowOn && !opt.light) { FP.floor().furniture.forEach(q => { if (q !== m && FP.isLamp(FP.model(q))) q.on = false; }); opt.light = true; updLampBtn(); }
           m.on = nowOn; FP.changed();
         }
+        else if (m && FP.model(m) && FP.model(m).doors) { FP.snap(); m.open = !m.open; FP.changed(); }   // дверцы шкафа
         return;
       }
     });

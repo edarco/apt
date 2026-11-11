@@ -302,7 +302,7 @@
     faces.forEach(fc => {
       const V = fc.pts.map(i => N[i]); if (V.length < 3 || FP.polyArea(V) < .05) return;
       const th = fc.keys.map(k => E.get(k).t); fc.keys.forEach(k => used.add(k));
-      const idx = f.rooms.length + made.length, r = { id: FP.uid(), name: 'Комната ' + (idx + 1), x: 0, y: 0, width: 1, depth: 1, wt: {}, material: 'oak', color: FP.PALETTE[idx % FP.PALETTE.length] };
+      const idx = f.rooms.length + made.length, r = { id: FP.uid(), name: 'Комната ' + (idx + 1), x: 0, y: 0, width: 1, depth: 1, wt: {}, material: 'oak', color: '#c19a6b', floor: { m: 'lam_oak_nat', c: null } };
       r.poly = FP.inner() ? FP.offsetPoly(V, th.map(t => t / 2)) : V.map(q => q.slice());
       th.forEach((t, i) => { r.wt['p' + i] = t; }); FP.fixPoly(r); made.push(r);
     });

@@ -339,6 +339,12 @@
   [['светлый', 'light', '#c9c8c4'], ['серый', 'grey', '#a3a3a0'], ['тёплый', 'warm', '#bdb3a4'], ['тёмный', 'dark', '#6d6e70']]
     .forEach(q => add('Прочее', 'cem_' + q[1], 'Микроцемент · ' + q[0], 'floor', 'mottle', q[2], { tw: 1.2, th: 1.2, n: 180, r0: .1, r1: .35, a: .1, dk: .88, lt: 1.1, gr: 5000, ga: .35 }));
 
+  // подоконники
+  add('Подоконники', 'sill_white', 'Белый пластик', 'sill', 'paint', '#f4f2ee', { sh: 40 });
+  [['Дуб', '#c19a6b'], ['Орех', '#6b4429'], ['Венге', '#3d2b22'], ['Дуб белёный', '#e3d3b5']].forEach((q, i) => add('Подоконники', 'sill_w' + i, 'Дерево · ' + q[0], 'sill', 'plank', q[1], { bw: .12, bl: .6, rows: 6, gw: .001 }));
+  [['Каррара', '#ecebe8', '#8b8f94'], ['Чёрный мрамор', '#26272a', '#d8d2c4']].forEach((q, i) => add('Подоконники', 'sill_m' + i, 'Мрамор · ' + q[0], 'sill', 'tile', q[1], { a: .6, gw: .0005, veins: 1, vc: q[2], nv: 5, gloss: 1, var: .03, grout: q[1] }));
+  [['светлый', '#c9c8c4'], ['серый', '#a3a3a0'], ['тёмный', '#6d6e70']].forEach((q, i) => add('Подоконники', 'sill_c' + i, 'Камень / бетон · ' + q[0], 'sill', 'mottle', q[1], { tw: 1.2, th: 1.2, n: 180, r0: .1, r1: .35, a: .1, dk: .88, lt: 1.1, gr: 5000, ga: .35 }));
+
   // ---------- рисование текстуры ----------
   M.canvasFor = (P, color, S) => {
     const spec = Object.assign({}, P.p, { c: color || P.c, seed: hashStr(P.id) % 977 }), kd = K[P.k](spec), cv = document.createElement('canvas');
@@ -369,6 +375,9 @@
   };
   FP.zoneOf = (r, side) => { const f = r.fin || {}; return FP.zoneNorm(f[side] || f.all, FP.defWallFin()); };
   FP.wallZone = c => FP.zoneNorm(c.fin || (c.color ? { up: { m: 'paint', c: c.color } } : null), FP.defWallFin());
+
+  FP.sillSpec = o => o.sillFin && o.sillFin.m ? { m: o.sillFin.m, c: o.sillFin.c || null } : { m: 'sill_white', c: null };
+
   // отделка стены из FP.getWalls(): inSign — какая грань (+z или -z) смотрит в комнату
   FP.wallFin = function (w) {
     const def = FP.defWallFin();

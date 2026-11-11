@@ -43,12 +43,13 @@
 
     const cat = $('catalog'); cat.innerHTML = '';
     const tb = el('div', 'btns');
-    tb.appendChild(btn('+ Своя мебель', () => FP.ui.customDlg())); tb.appendChild(btn('Импорт', () => FP.ui.libImport())); tb.appendChild(btn('Экспорт', () => FP.ui.libExport()));
+    tb.appendChild(btn('+ Своя мебель', () => FP.ui.customDlg())); tb.appendChild(btn('Импорт', () => FP.ui.libImport())); tb.appendChild(btn('Экспорт', () => FP.ui.libExport())); tb.appendChild(btn('Импорт GLB', () => FP.ui.glbImport()));
     cat.appendChild(tb);
     const q = el('input'); q.type = 'text'; q.placeholder = 'Поиск мебели…'; q.style.cssText = 'width:100%;margin-bottom:6px'; cat.appendChild(q);
     FP.CATALOG.forEach((g, gi) => {
       const dt = el('details'); dt.open = gi === 0; dt.appendChild(el('summary', '', g.cat));
-      g.items.forEach(it => {
+      dt.ontoggle = () => { if (dt.open && !q.value.trim()) cat.querySelectorAll('details').forEach(o => { if (o !== dt) o.open = false; }); };   // аккордеон (при поиске не мешает)
+      g.items.slice().sort((a, b) => a[1].localeCompare(b[1], 'ru', { numeric: true })).forEach(it => {   // по алфавиту, «Кровать 90» перед «Кровать 100»
         const b = el('button', '', it[1] + '<small>' + it[2] + '×' + it[3] + '</small>'); b.dataset.n = it[1].toLowerCase();
         b.onclick = () => { if (FP.view === '3d') FP.setView('2d'); FP.addFurniture(it); }; dt.appendChild(b);
       });
