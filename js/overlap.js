@@ -4,7 +4,7 @@
     soft: new Set(['chair', 'office_chair', 'barstool', 'pouf']),                                   // могут стоять у стола и друг у друга
     table: new Set(['table', 'dining', 'roundtable', 'oval', 'desk', 'desk_pc', 'beauty_cart']),    // под них можно задвинуть мягкие
     skip: new Set(['rug', 'rug_round', 'worktop', 'backsplash', 'curtain', 'robot_vac']),           // эти предметы не проверяются вообще
-    built: new Set(['hob', 'hob_gas', 'oven', 'microwave', 'washer', 'dishwasher', 'fridge', 'fridge_sbs', 'hood', 'boiler']),   // встраиваемые
+    built: new Set(['hob', 'hob_gas', 'oven', 'microwave', 'washer', 'dishwasher', 'hood', 'boiler']),   // встраиваемые
     host: new Set(['counter', 'drawer_base', 'tall_cab', 'tall_oven', 'wardrobe', 'wardrobe_mir', 'wall_cab', 'wall_cab2', 'shelf'])  // шкафы, куда встраивают
   };
 

@@ -154,10 +154,13 @@
   function roomP(root, r) {
     root.appendChild(el('h3', '', 'Комната'));
     root.appendChild(row('Название', textIn(r, 'name')));
+    root.appendChild(row('Тип комнаты', selIn([['', 'не задан']].concat(FP.RTYPES || []), r.rtype || '', v => { if (v) r.rtype = v; else delete r.rtype; })));
 
     if (!r.poly) { root.appendChild(row('X, м', numIn(r, 'x'))); root.appendChild(row('Y, м', numIn(r, 'y'))); root.appendChild(row('Ширина, м', numIn(r, 'width', { min: .1 }))); root.appendChild(row('Глубина, м', numIn(r, 'depth', { min: .1 }))); }
     root.appendChild(el('div', 'stat', '<span>Площадь</span><b>' + FP.roomArea(r).toFixed(2) + ' м²</b>'));
+
     root.appendChild(el('div', 'stat', '<span>Периметр</span><b>' + FP.roomPerim(r).toFixed(2) + ' м</b>'));
+    const baf = el('div', 'btns'); baf.appendChild(btn('✨ Заполнить мебелью и светом…', () => FP.ui.autofill(r))); root.appendChild(baf);
     shapeBlock(root, r); if (r.poly) polyBlock(root, r); mergeBlock(root, r);
 
     root.appendChild(el('h4', '', 'Пол'));

@@ -511,7 +511,11 @@
   cv.addEventListener('dblclick', e => {
     if (V.tool === 'poly') { finishPoly(); return; }
     if (V.tool === 'wall') { tmp = null; V.draw(); return; }
-    if (V.tool === 'select') { const p = P(e); FP.ui.walkHere(wx(p.x), wy(p.y)); }
+    if (V.tool === 'select') {
+      const p = P(e), h = hitTest(wx(p.x), wy(p.y)), op = h && h.type === 'opening' && FP.floor().openings.find(q => q.id === h.id);
+      if (op && op.kind === 'door') { if (!op.locked) { FP.snap(); op.open = !op.open; FP.changed(); } return; }   // двойной клик по двери: открыть / закрыть
+      FP.ui.walkHere(wx(p.x), wy(p.y));                                                                              // иначе: встать в эту точку в 3D
+    }
   });
   cv.addEventListener('wheel', e => {
     e.preventDefault();

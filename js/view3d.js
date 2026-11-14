@@ -614,15 +614,25 @@
     const spd = Math.hypot(vel.x, vel.z); bobT += spd * dt * 4.2; walk.bob = Math.sin(bobT) * .012 * Math.min(1, spd / 1.6);   // покачивание головы
 
     if (spd > .01) collide();
+    walk.eye = clamp(walk.eye + ((keys.PageUp ? 1 : 0) - (keys.PageDown ? 1 : 0)) * 1.0 * dt, .3, 2.2);   // PageUp / PageDown: выше / ниже
+    syncRoom();
     if (tour) {
       tour.t += dt; walk.yaw += .3 * dt;
       if (tour.t > 5) { tour.t = 0; const rs = FP.floor().rooms; if (rs.length) { tour.i = (tour.i + 1) % rs.length; V3.walkAt(...FP.roomCenter(rs[tour.i]), true); } }
     }
   }
 
+  let walkRoomId = null;
+  function syncRoom() {                              // выбор в списке комнат следует за тем, где вы стоите
+    const s = FP.$('o3room'); if (!s || !isWalk()) return;
+    const r = FP.floor().rooms.find(q => FP.pointInRoom(q, walk.x, walk.z));
+    if (r && r.id !== walkRoomId) { walkRoomId = r.id; s.value = r.id; refreshCorners(); }
+  }
+
   V3.walkAt = function (x, y, keepTour) {
     walk.x = x; walk.z = y; if (!keepTour) { tour = null; FP.$('o3tour').classList.remove('on'); }
     if (!isWalk()) { opt.cam = 'walk'; FP.$('o3cam').value = 'walk'; needs = true; }
+    walkRoomId = null; syncRoom();
     updateHelp();
   };
 
@@ -652,7 +662,8 @@
       if (FP.pointInRoom(r, x, y) && !f.furniture.some(m => blocksWalk(m, f) && FP.footRects(m).some(z => { const ex = x - z.cx, ey = y - z.cy; return Math.abs(ex * z.ux + ey * z.uy) < z.hl + .2 && Math.abs(-ex * z.uy + ey * z.ux) < z.ht + .2; }))) { pos = [x, y]; break; }
     }
     if (!pos) pos = [c[0], c[1]];
-    walk.x = pos[0]; walk.z = pos[1]; walk.eye = Math.max(walk.eye, 2.0);
+    walk.x = pos[0]; walk.z = pos[1];
+    // walk.eye = Math.max(walk.eye, 2.0);
     walk.yaw = Math.atan2(c[0] - pos[0], -(c[1] - pos[1]));
     walk.pitch = -Math.atan((walk.eye - .6) / Math.max(1.5, Math.hypot(c[0] - pos[0], c[1] - pos[1])));   // чуть вниз, на пол комнаты
     opt.fov = Math.max(opt.fov, 95); vel.x = vel.z = 0;
@@ -763,7 +774,7 @@
         let o = h.object, s = null;
         while (o) { if (o.userData && o.userData.sel) { s = o.userData.sel; break; } o = o.parent; }
 
-        if (!s) continue;                                   // тени-подложки и т.п. пропускаем
+        if (!s) continue;                                   /// тени-подложки и т.п. пропускаем
         if (FP.sel && FP.sel.type === s.type && FP.sel.id === s.id && (!pick3 || pick3.side === s.side)) { pick3 = null; FP.select(null); return; }   // повторный клик по тому же: снять выбор
         pick3 = s; FP.select(s.type, s.id);
 
@@ -774,6 +785,11 @@
     }
     cvs.addEventListener('dblclick', e => {                // двойной клик по лампе: вкл/выкл
       for (const h of rayAt(e)) {
+        let so = h.object, sl = null; while (so) { if (so.userData && so.userData.sel) { sl = so.userData.sel; break; } so = so.parent; }
+        if (sl && sl.type === 'opening') {                  // двойной клик по двери: открыть / закрыть
+          const dop = FP.floor().openings.find(q => q.id === sl.id);
+          if (dop && dop.kind === 'door' && !dop.locked) { FP.snap(); dop.open = !dop.open; FP.select('opening', dop.id); FP.changed(); return; }
+        }
         let o = h.object; while (o && !(o.userData && o.userData.fid)) o = o.parent;
         if (!o) continue;
         const m = FP.floor().furniture.find(q => q.id === o.userData.fid);
@@ -790,12 +806,12 @@
     cvs.addEventListener('wheel', e => {
       e.preventDefault();
       if (isWalk()) {
-        if (e.shiftKey) walk.eye = clamp(walk.eye - e.deltaY * .0005, 1, 2.2);
+        if (e.shiftKey) walk.eye = clamp(walk.eye - e.deltaY * .001, .3, 2.2);
         else if (e.ctrlKey) opt.fov = clamp(opt.fov + e.deltaY * .03, 45, 105);          // Ctrl+колесо: угол обзора
         else { const st = -clamp(e.deltaY, -120, 120) * .006; moveWalk(Math.sin(walk.yaw) * st, -Math.cos(walk.yaw) * st); }   // колесо: шаг вперёд/назад
       } else orbit.dist = clamp(orbit.dist * Math.exp(e.deltaY * .001), 1.5, 120);
     }, { passive: false });
-    document.addEventListener('keydown', e => { if (FP.view === '3d' && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) { keys[e.code] = true; if (isWalk() && /^(Arrow|Space)/.test(e.code)) e.preventDefault(); } });
+    document.addEventListener('keydown', e => { if (FP.view === '3d' && !/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) { keys[e.code] = true; if (isWalk() && /^(Arrow|Space|Page)/.test(e.code)) e.preventDefault(); } });
     document.addEventListener('keyup', e => { keys[e.code] = false; });
     bindBar(); resize(); return true;
   };
@@ -820,7 +836,7 @@
     if (v) s.value = v; refreshCorners();
   }
   function updateHelp() {
-    FP.$('o3help').textContent = isWalk() ? 'WASD / стрелки — ходьба, Q/E — поворот, мышь — взгляд, Shift — бег, колесо — вперёд/назад, Ctrl+колесо — угол обзора, Shift+колесо — рост глаз' : 'ЛКМ — вращать, ПКМ/Shift — сдвиг, колесо — масштаб';
+    FP.$('o3help').textContent = isWalk() ? 'WASD / стрелки — ходьба, Q/E — поворот, мышь — взгляд, Shift — бег, колесо — вперёд/назад, Ctrl+колесо — угол обзора, Shift+колесо или PageUp/PageDown — рост глаз (0,3–2,2 м)' : 'ЛКМ — вращать, ПКМ/Shift — сдвиг, колесо — масштаб';
     FP.$('o3cutv').textContent = opt.cut.toFixed(1) + ' м';
     refreshCorners();
   }

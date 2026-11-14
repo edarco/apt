@@ -310,10 +310,14 @@
     const o = FP.selObj(); if (!o || FP.sel.type !== 'furniture') return; FP.snap();
     o.rotation = ((((o.rotation || 0) + deg) % 360) + 360) % 360; FP.changed();
   };
-  // Навесное (розетки, шкафчики, зеркала, ТВ...): при перетаскивании около стены прилипает к её поверхности и поворачивается задней стороной к стене
+
+  // Мебель, которая ставится спиной к стене (прилипает и поворачивается при перетаскивании рядом со стеной; Alt отключает)
+  FP.WALLKINDS = new Set('wardrobe wardrobe_mir dresser shelf tvstand shoe_rack nightstand fridge fridge_sbs counter drawer_base sink tall_cab base_oven tall_oven cab_washer stove dishwasher washer vanity boiler sofa sofa_l bed bed1 toilet toilet_wall basin basin_wall desk desk_pc mirror_full radiator'.split(' '));
+  // Навесное (розетки, шкафчики, зеркала, ТВ...) и мебель из FP.WALLKINDS: при перетаскивании около стены прилипает к её поверхности и поворачивается задней стороной к стене
   FP.wallSnap = function (m) {
-    const M = FP.model(m); if (!M || !M.wall) return;
-    let best = null, bd = 0.45;
+    const M = FP.model(m); if (!M || !(M.wall || FP.WALLKINDS.has(m.kind))) return;
+    let best = null, bd = M.wall ? 0.45 : 0.4;
+
     FP.getWalls(FP.floor()).forEach(w => {
       const L = FP.wlen(w); if (L < .01) return;
       const ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, px = m.x - w.x1, py = m.y - w.y1, t0 = px * ux + py * uy;
@@ -324,7 +328,9 @@
         side = (ni[0] * nx + ni[1] * ny) >= 0 ? 1 : -1;
         if (sd * side < -w.t / 2) return;                    // середина стены пройдена: это уже соседняя комната
       }
-      const d = Math.abs(sd * side - w.t / 2);               // расстояние до лицевой поверхности стены
+      const d0 = Math.abs(sd * side - w.t / 2), a0 = (m.rotation || 0) * Math.PI / 180, sx = nx * side, sy = ny * side;   // центр → лицевая поверхность стены
+      const ex = (m.width / 2) * Math.abs(Math.cos(a0) * sx + Math.sin(a0) * sy) + (m.depth / 2) * Math.abs(-Math.sin(a0) * sx + Math.cos(a0) * sy);   // полуразмер предмета в сторону стены при текущем повороте
+      const d = M.wall ? d0 : Math.max(0, d0 - ex);          // для мебели: зазор от края предмета до стены
       if (d < bd) { bd = d; best = { w, t0, nx: nx * side, ny: ny * side, ux, uy, L }; }
     });
     if (!best) return;
