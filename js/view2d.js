@@ -76,16 +76,81 @@
     f.rooms.forEach(r => { if (FP.pointInRoom(r, x, y) && FP.roomArea(r) < ba) { ba = FP.roomArea(r); best = { type: 'room', id: r.id }; } });
     return best;
   }
+
+  // ---------- ручки стен выбранной комнаты (прямоугольной и многоугольной) ----------
+  // данные одной стороны i: начало оси стены на экране, направление, длина, проёмы (в метрах вдоль стороны)
+  function edgeInfo(o, i) {
+    const P = FP.rpoly(o), n = P.length, sg = FP.polySign(P), a = P[i], b = P[(i + 1) % n];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) return null;
+    const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, key = o.poly ? 'p' + i : 'nesw'[i], h = FP.inner() ? FP.wt(o, key) / 2 : 0;
+    const rev = !o.poly && (i === 2 || i === 3);       // у прямоугольника южная и западная стены в модели идут в обратную сторону
+    const ops = FP.floor().openings.filter(q => q.wallId === o.id + ':' + key)
+      .map(q => rev ? [L - q.offset - q.width, L - q.offset] : [q.offset, q.offset + q.width]).sort((p, q) => p[0] - q[0]);
+    return { ux, uy, L, ops, ax: sx(a[0] + uy * sg * h), ay: sy(a[1] - ux * sg * h) };
+  }
+  // положение планки-ручки: середина самого длинного участка стены без проёмов
+  function edgeHandle(o, i) {
+    const E = edgeInfo(o, i); if (!E || E.L * V.s < 36) return null;
+    const free = []; let cur = 0;
+    E.ops.forEach(q => { if (q[0] > cur) free.push([cur, q[0]]); cur = Math.max(cur, q[1]); });
+    if (cur < E.L) free.push([cur, E.L]);
+    let pos = E.L / 2;
+    if (free.length) {
+      const f0 = free.reduce((p, q) => (q[1] - q[0] > p[1] - p[0] ? q : p)); pos = (f0[0] + f0[1]) / 2;
+      if (o.poly && Math.abs(pos - E.L / 2) * V.s < 18) {                 // не накрывать кружок «+» (середина стороны)
+        const d = 18 / V.s, c1 = [pos + d, pos - d].find(v => v >= f0[0] && v <= f0[1]); if (c1 != null) pos = c1;
+      }
+    }
+    const m = 14 / V.s; pos = Math.max(m, Math.min(E.L - m, pos));       // не ближе 14 px к вершинам
+    return { i, x: E.ax + E.ux * pos * V.s, y: E.ay + E.uy * pos * V.s, ang: Math.atan2(E.uy, E.ux) };
+  }
+  function edgeHandleHit(o, px, py) {                // попадание в планку (проверяется раньше двери/окна)
+    const n = FP.rpoly(o).length;
+    for (let i = 0; i < n; i++) {
+      const H = edgeHandle(o, i); if (!H) continue;
+      const dx = px - H.x, dy = py - H.y, c0 = Math.cos(H.ang), s0 = Math.sin(H.ang);
+      if (Math.abs(dx * c0 + dy * s0) <= 12 && Math.abs(-dx * s0 + dy * c0) <= 8) return { kind: 'edge', i };
+    }
+    return null;
+  }
+  function edgeHit(o, px, py) {                      // попадание в саму линию стены (кроме мест, где стоят проёмы)
+    const n = FP.rpoly(o).length, r = 9;
+    for (let i = 0; i < n; i++) {
+      const E = edgeInfo(o, i); if (!E) continue;
+      const dx = px - E.ax, dy = py - E.ay, along = dx * E.ux + dy * E.uy, across = Math.abs(-dx * E.uy + dy * E.ux);
+      if (across > 5 || along < r || along > E.L * V.s - r) continue;
+      const m = along / V.s; if (E.ops.some(q => m >= q[0] - .06 && m <= q[1] + .06)) continue;
+      return { kind: 'edge', i };
+    }
+    return null;
+  }
+  function drawEdgeHandles(o) {                      // рисует планки на всех сторонах выбранной комнаты
+    const n = FP.rpoly(o).length;
+    c.save(); c.setLineDash([]); c.lineWidth = 1.5; c.strokeStyle = '#1e6fbf'; c.fillStyle = '#fff';
+    for (let i = 0; i < n; i++) {
+      const H = edgeHandle(o, i); if (!H) continue;
+      c.save(); c.translate(H.x, H.y); c.rotate(H.ang);
+      c.beginPath(); c.rect(-10, -4.5, 20, 9); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(0, -2.5); c.lineTo(0, 2.5); c.stroke();
+      c.restore();
+    }
+    c.restore();
+  }
+
   function handleHit(px, py) {
     const o = FP.selObj(); if (!o) return null; const r = 9;
     if (FP.sel.type === 'room') {
       if (o.poly) {
         for (let i = 0; i < o.poly.length; i++) if (Math.hypot(px - sx(o.poly[i][0]), py - sy(o.poly[i][1])) <= r) return { kind: 'pv', i };
+        { const eh = edgeHandleHit(o, px, py); if (eh) return eh; }     // НОВОЕ: планка стены (раньше кружка «+», двери и окна)
         for (let i = 0; i < o.poly.length; i++) { const a = o.poly[i], b = o.poly[(i + 1) % o.poly.length]; if (Math.hypot(px - sx((a[0] + b[0]) / 2), py - sy((a[1] + b[1]) / 2)) <= 7) return { kind: 'pm', i }; }
-        return null;
+        return edgeHit(o, px, py);
       }
       for (const [cx, cy, n] of [[o.x, o.y, 'tl'], [o.x + o.width, o.y, 'tr'], [o.x, o.y + o.depth, 'bl'], [o.x + o.width, o.y + o.depth, 'br']])
         if (Math.hypot(px - sx(cx), py - sy(cy)) <= r) return { kind: 'corner', c: n };
+
+      { const eh = edgeHandleHit(o, px, py) || edgeHit(o, px, py); if (eh) return eh; }   // НОВОЕ: сначала планка, потом сама линия стены
+
     } else if (FP.sel.type === 'wall') {
       if (Math.hypot(px - sx(o.x1), py - sy(o.y1)) <= r) return { kind: 'wend', end: 1 };
       if (Math.hypot(px - sx(o.x2), py - sy(o.y2)) <= r) return { kind: 'wend', end: 2 };
@@ -94,6 +159,92 @@
       if (Math.hypot(px - sx(o.x + h * Math.sin(a)), py - sy(o.y - h * Math.cos(a))) <= r) return { kind: 'rot' };
     }
     return null;
+  }
+
+  // ---------- перетаскивание стены (прямоугольной и многоугольной комнаты) вместе с соседями за стеной ----------
+  const cl = o => JSON.parse(JSON.stringify(o));
+  const rd = v => +v.toFixed(4);
+
+  // сдвиг стороны i многоугольника P на t вдоль единичной нормали N; соседние стороны остаются на своих прямых
+  function shiftEdge(P, i, N, t) {
+    const n = P.length, j = (i + 1) % n, pi = (i + n - 1) % n, nj = (j + 1) % n, a = P[i], b = P[j];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, p0 = [a[0] + N[0] * t, a[1] + N[1] * t];
+    const hit = (c, d) => {                          // пересечение сдвинутой прямой с прямой c→d
+      const vx = d[0] - c[0], vy = d[1] - c[1], cr = ux * vy - uy * vx;
+      if (Math.abs(cr) < 1e-6 * Math.hypot(vx, vy)) return null;
+      const s = ((c[0] - p0[0]) * vy - (c[1] - p0[1]) * vx) / cr;
+      return [p0[0] + ux * s, p0[1] + uy * s];
+    };
+    const Q = P.map(q => q.slice());
+    Q[i] = hit(P[pi], P[i]) || [a[0] + N[0] * t, a[1] + N[1] * t];
+    Q[j] = hit(P[j], P[nj]) || [b[0] + N[0] * t, b[1] + N[1] * t];
+    return Q;
+  }
+  // можно ли так оставить: стороны не короче minL, не вывернулись, площадь не нулевая
+  function polyOK(O, Q, minL) {
+    const n = O.length;
+    for (let k = 0; k < n; k++) {
+      const a = O[k], b = O[(k + 1) % n], c = Q[k], d = Q[(k + 1) % n];
+      const L0 = Math.hypot(b[0] - a[0], b[1] - a[1]), L1 = Math.hypot(d[0] - c[0], d[1] - c[1]);
+      if (L1 < Math.min(minL, L0) - 1e-4) return false;
+      if ((b[0] - a[0]) * (d[0] - c[0]) + (b[1] - a[1]) * (d[1] - c[1]) <= 0) return false;
+    }
+    return FP.polySign(Q) === FP.polySign(O) && Math.abs(FP.polyArea(Q)) > .05;
+  }
+  function edgeApply(room, Q) {                      // записать новые вершины в комнату (прямоугольник → x, y, width, depth)
+    Q = Q.map(q => [rd(q[0]), rd(q[1])]);
+    if (room.poly) { room.poly = Q; FP.syncBox(room); return; }
+    const xs = Q.map(q => q[0]), ys = Q.map(q => q[1]);
+    room.x = Math.min(...xs); room.y = Math.min(...ys); room.width = rd(Math.max(...xs) - room.x); room.depth = rd(Math.max(...ys) - room.y);
+  }
+
+  // i — номер стороны (у прямоугольника 0=север, 1=восток, 2=юг, 3=запад), x0, y0 — курсор в метрах, solo — без соседей
+  function edgeStart(i, r, x0, y0, solo) {
+    const f = FP.floor(), P = FP.rpoly(r).map(q => q.slice()), n = P.length, a = P[i], b = P[(i + 1) % n];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, N = [-uy, ux], ow = -FP.polySign(P), nb = [];
+    if (!solo) f.rooms.forEach(m => {
+      if (m === r) return;
+      const Q = FP.rpoly(m).map(q => q.slice()), k = Q.length, sgm = FP.polySign(Q), js = [];
+      Q.forEach((c, j) => {
+        const d = Q[(j + 1) % k], l2 = Math.hypot(d[0] - c[0], d[1] - c[1]); if (l2 < 1e-6) return;
+        const vx = (d[0] - c[0]) / l2, vy = (d[1] - c[1]) / l2;
+        if (Math.abs(ux * vy - uy * vx) > .02) return;                                       // не параллельна нашей стороне
+        if ((-vy * sgm) * (N[0] * ow) + (vx * sgm) * (N[1] * ow) < .9) return;               // её «внутрь комнаты» должно смотреть от нас
+        const g = ((c[0] - a[0]) * N[0] + (c[1] - a[1]) * N[1]) * ow;                        // зазор между линиями стен (толщина стены)
+        if (g < -.02 || g > .6) return;
+        const pc = (c[0] - a[0]) * ux + (c[1] - a[1]) * uy, pd = (d[0] - a[0]) * ux + (d[1] - a[1]) * uy;
+        if (Math.min(L, Math.max(pc, pd)) - Math.max(0, Math.min(pc, pd)) > .05) js.push(j); // перекрываются по длине
+      });
+      if (js.length) nb.push({ id: m.id, P: Q, rect: !m.poly, js });
+    });
+    const ids = new Set([r.id].concat(nb.map(q => q.id))), walls = FP.getWalls(f), oc = new Map();
+    f.openings.forEach(op => {                        // запоминаем, где проёмы стоят на плане сейчас
+      const w = walls.find(q => q.id === op.wallId); if (!w || !ids.has(op.wallId.split(':')[0])) return;
+      const p = FP.openPos(w, op); oc.set(op.id, { cx: p.cx, cy: p.cy });
+    });
+    return { mode: 'edge', i, o: cl(r), P, rect: !r.poly, a: a.slice(), N, nb, oc, c0: x0 * N[0] + y0 * N[1], moved: false };
+  }
+  function edgeMove(r, x, y, e) {
+    const D = drag, f = FP.floor(), N = D.N;
+    const raw = x * N[0] + y * N[1] - D.c0, axis = Math.abs(N[0]) > .999 || Math.abs(N[1]) > .999, base = D.a[0] * N[0] + D.a[1] * N[1];
+    let t = axis ? snv(base + raw, e) - base : snv(raw, e);       // горизонтальные/вертикальные стены — привязка к сетке по координате, косые — по смещению
+    const mv = (tt, q) => q.js.reduce((Pc, j) => shiftEdge(Pc, j, N, tt), q.P);
+    const okAt = tt => !tt || (polyOK(D.P, shiftEdge(D.P, D.i, N, tt), D.rect ? .3 : .1) && D.nb.every(q => polyOK(q.P, mv(tt, q), q.rect ? .3 : .1)));
+    const sg = t < 0 ? -1 : 1;
+    for (let k = 0; k < 3000 && !okAt(t); k++) t -= sg * .01;     // упёрлись в минимальный размер: отступаем к безопасному положению
+    if (!okAt(t)) t = 0;
+    edgeApply(r, shiftEdge(D.P, D.i, N, t));
+    D.nb.forEach(q => { const m = f.rooms.find(z => z.id === q.id); if (m) edgeApply(m, mv(t, q)); });
+    // проёмы остаются на тех же местах плана (пересчёт offset по новой стене)
+    f.openings.forEach(op => { if (D.oc.has(op.id)) delete op.k; });
+    const walls = FP.getWalls(f);
+    f.openings.forEach(op => {
+      const c = D.oc.get(op.id); if (!c) return;
+      const w = walls.find(q => q.id === op.wallId); if (!w) return;
+      const L = FP.wlen(w) || 1, ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L;
+      op.offset = Math.max(0, Math.min(Math.max(0, L - op.width), (c.cx - w.x1) * ux + (c.cy - w.y1) * uy - op.width / 2));
+      delete op.k;
+    });
   }
 
   // ---------- рисование ----------
@@ -203,6 +354,38 @@
     return e;
   }
 
+  // ---------- размеры участков стены: до проёма / проём / между / после ----------
+  function lblS(text, px, py, rot, col) {
+    c.save(); c.translate(px, py); if (rot) c.rotate(rot); c.font = '10px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const w = c.measureText(text).width + 6; c.fillStyle = C.lblBg; c.fillRect(-w / 2, -7, w, 14); c.fillStyle = col; c.fillText(text, 0, 0); c.restore();
+  }
+  function wallChain(w, f, walls) {
+    const L = FP.wlen(w); if (L * V.s < 40) return;
+    const sp = FP.spans(f, walls, w).filter(a => !a.o.merged)                    // проёмы этой стены и соседних стен на той же линии
+      .map(a => ({ s: Math.max(0, a.s), e: Math.min(L, a.e), k: a.o.kind })).filter(a => a.e - a.s > .01).sort((p, q) => p.s - q.s);
+    if (!sp.length) return;
+    const ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L;
+    const inn = w.nx != null ? [w.nx, w.ny] : w.side ? { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[w.side] : [-uy, ux], out = [-inn[0], -inn[1]];   // наружу от комнаты
+    const row = (w.room && !w.room.poly && (w.side === 's' || w.side === 'e')) ? 14 : 32;   // у стен с общей длиной (север/запад/многоугольник) — вторым рядом
+    const off = Math.max(1.5, w.t * V.s) / 2 + row;
+    const pt = s => [sx(w.x1 + ux * s) + out[0] * off, sy(w.y1 + uy * s) + out[1] * off];
+    const pcs = []; let cur = 0;
+    sp.forEach(a => { const s0 = Math.max(a.s, cur); if (a.e <= s0) return; if (s0 > cur + .005) pcs.push({ a: cur, b: s0, k: 'wall' }); pcs.push({ a: s0, b: a.e, k: a.k }); cur = a.e; });
+    if (cur < L - .005) pcs.push({ a: cur, b: L, k: 'wall' });
+    c.save(); c.strokeStyle = '#8c8c8c'; c.lineWidth = 1; c.beginPath();
+    const A = pt(0), B = pt(L); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]);
+    pcs.forEach(q => [q.a, q.b].forEach(s => { const p = pt(s); c.moveTo(p[0] - out[0] * 3, p[1] - out[1] * 3); c.lineTo(p[0] + out[0] * 3, p[1] + out[1] * 3); }));
+    c.stroke(); c.restore();
+    let ang = Math.atan2(uy, ux); if (ang >= Math.PI / 2 - 1e-6) ang -= Math.PI; else if (ang < -Math.PI / 2 - 1e-6) ang += Math.PI;   // текст не вверх ногами
+    const COL = { wall: C.lblTx, window: '#2f78d0', door: '#d9822b', gap: '#8a8a8a' };
+    c.font = '10px system-ui';
+    pcs.forEach(q => {
+      const t = (q.b - q.a).toFixed(2);
+      if ((q.b - q.a) * V.s < c.measureText(t).width + 8) return;                // участок слишком короткий для подписи: приблизьте план колесом
+      const p = pt((q.a + q.b) / 2); lblS(t, p[0], p[1], ang, COL[q.k] || C.lblTx);
+    });
+  }
+
   V.draw = function () {
     if (!FP.data) return;
     C = theme(); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
@@ -263,6 +446,9 @@
       });
 
       f.walls.forEach(w => lbl(FP.wlen(w).toFixed(2), sx((w.x1 + w.x2) / 2), sy((w.y1 + w.y2) / 2) - 12));
+
+      walls.forEach(w => { if (!w.rail) wallChain(w, f, walls); });   // НОВОЕ: участки стены вокруг окон/дверей/проёмов
+
     } else if (so && sel.type === 'room') {
       lbl(so.width.toFixed(2), sx(so.x + so.width / 2), sy(so.y) - 12); lbl(so.depth.toFixed(2), sx(so.x) - 14, sy(so.y + so.depth / 2), -Math.PI / 2);
     } else if (so && sel.type === 'wall') lbl(FP.wlen(so).toFixed(2), sx((so.x1 + so.x2) / 2), sy((so.y1 + so.y2) / 2) - 12);
@@ -283,10 +469,14 @@
             c.beginPath(); c.moveTo(sx(a[0]), sy(a[1])); c.lineTo(sx(b[0]), sy(b[1])); c.stroke();
             c.beginPath(); c.arc(sx(a[0]), sy(a[1]), 8, 0, 7); c.fill(); c.lineWidth = 2;
           }
+
         } else {
           c.strokeRect(sx(so.x), sy(so.y), so.width * s, so.depth * s); c.setLineDash([]);
           [[so.x, so.y], [so.x + so.width, so.y], [so.x, so.y + so.depth], [so.x + so.width, so.y + so.depth]].forEach(q => { c.beginPath(); c.rect(sx(q[0]) - 5, sy(q[1]) - 5, 10, 10); c.fill(); c.stroke(); });
         }
+
+        drawEdgeHandles(so);       // НОВОЕ: синие планки на стенах (и у прямоугольника, и у многоугольника)
+
       } else if (sel.type === 'wall') {
         c.setLineDash([]); c.lineWidth = Math.max(3, (so.thickness || f.thickness) * s + 2); c.globalAlpha = .45; c.beginPath(); c.moveTo(sx(so.x1), sy(so.y1)); c.lineTo(sx(so.x2), sy(so.y2)); c.stroke(); c.globalAlpha = 1; c.lineWidth = 2;
         [[so.x1, so.y1], [so.x2, so.y2]].forEach(q => { c.beginPath(); c.arc(sx(q[0]), sy(q[1]), 6, 0, 7); c.fill(); c.stroke(); });
@@ -416,6 +606,9 @@
         drag = { mode: 'pv', i: hh.i + 1, o: JSON.parse(JSON.stringify(o)), moved: true }; FP.changed(); return;
       }
       if (hh.kind === 'pv' && e.shiftKey) { if (o.poly.length > 3) { FP.snap(); FP.polyRemove(o, hh.i); FP.changed(); } return; }
+
+      if (hh.kind === 'edge') { drag = edgeStart(hh.i, o, x, y, e.altKey); return; }   // НОВОЕ
+
       drag = Object.assign({ mode: hh.kind, o: JSON.parse(JSON.stringify(o)), moved: false }, hh); return;
     }
 
@@ -459,6 +652,8 @@
           const w = FP.getWalls(f).find(q => q.id === o.wallId);
           if (w) { const L = FP.wlen(w), ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L, pr = (x - w.x1) * ux + (y - w.y1) * uy; o.offset = Math.max(0, Math.min(L - o.width, snv(pr - o.width / 2, e))); delete o.k; }
         }
+      } else if (drag.mode === 'edge') {      // НОВОЕ
+        edgeMove(o, x, y, e);
       } else if (drag.mode === 'corner') {
         const od = drag.o, fx = drag.c.includes('l') ? od.x + od.width : od.x, fy = drag.c.includes('t') ? od.y + od.depth : od.y;
         let mx = snv(x, e), my = snv(y, e), nw = Math.abs(mx - fx), nd = Math.abs(my - fy);
@@ -476,6 +671,14 @@
       }
       V.draw(); schedProps(); return;
     }
+
+    if (V.tool === 'select' && !V.lock) {   // НОВОЕ: курсор «растянуть» над стеной выбранной комнаты
+      const h2 = FP.selObj() ? handleHit(p.x, p.y) : null;
+      let cur = 'default';
+      if (h2 && h2.kind === 'edge') { const Pq = FP.rpoly(FP.selObj()), q0 = Pq[h2.i], q1 = Pq[(h2.i + 1) % Pq.length], an = ((Math.atan2(q1[0] - q0[0], -(q1[1] - q0[1])) * 180 / Math.PI) % 180 + 180) % 180; cur = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'][Math.round(an / 45) % 4]; }
+      cv.style.cursor = cur;
+    }
+
     if (V.tool === 'wall' && tmp) { const q = wallEnd(e); tmp.x1 = q.x; tmp.y1 = q.y; }
     else if (V.tool === 'poly' && tmp && tmp.pts) { const q = polyPt(e); tmp.cur = [q.x, q.y]; }
     else if (V.tool === 'measure' && meas && !meas.done) { meas.b = ptSnap(x, y) || { x: snv(x, e), y: snv(y, e) }; }
