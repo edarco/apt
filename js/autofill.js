@@ -8,6 +8,9 @@
   const WH = '#edece6', LT = '#f4f2ee';
   const I = (kind, name, w, d, h, color, role, elev) => ({ kind, name, w, d, h, color, role, elev });   // role: s мягкое, w дерево, k шкафы/кухня, x не перекрашивать
 
+  const VROOMS = new Map();                         // НОВОЕ: временные прямоугольные «части» многоугольника (в проект не попадают)
+  const findRoom = (f, id) => f.rooms.find(q => q.id === id) || VROOMS.get(id);
+
   // Г-образные угловые шкафы: нижний (глубина веток 0,6 м) и навесной (0,35 м). Вторая ветка слева (в модели x < 0), для другого угла модель отзеркаливается
   {
     const B = (w, h, d, x, y, z, c) => ({ b: [w, h, d], at: [x, y, z], c: c || 'm' }), TOP = '#e8e4da';
@@ -25,16 +28,17 @@
     };
   }
 
-  const TYPES = [['kitchen', 'Кухня'], ['bedroom', 'Спальня'], ['living', 'Гостиная / зал'], ['bath', 'Ванная / санузел'], ['office', 'Рабочая комната'], ['hall', 'Коридор / прихожая'], ['cosmo', 'Косметологическая']];
+  const TYPES = [['kitchen', 'Кухня'], ['bedroom', 'Спальня'], ['kids', 'Детская спальня'], ['living', 'Гостиная / зал'], ['bath', 'Ванная / санузел'], ['office', 'Рабочая комната'], ['hall', 'Коридор / прихожая'], ['cosmo', 'Косметологическая']];
   FP.RTYPES = TYPES;                                // нужен панели свойств комнаты
   const OPTS = {
     kitchen: [['dining', 'Обеденный стол со стульями', true], ['hob', 'Встроенная газовая панель + духовка', true], ['dish', 'Посудомоечная машина', true], ['washer', 'Стиральная машина в шкафу', true], ['tall', 'Высокий шкаф-пенал до потолка', true]],
-    bedroom: [['dresser', 'Комод', true], ['ward2', 'Второй шкаф', true], ['mirror', 'Зеркало в рост', true], ['armchair', 'Кресло', false], ['desk', 'Рабочее место', false], ['rug', 'Ковёр', false]],
+    bedroom: [['tv', 'Телевизор на стене напротив кровати', true], ['vanity', 'Туалетный (дамский) столик со стулом', true], ['chair', 'Стул у стены', true], ['dresser', 'Комод', true], ['ward2', 'Второй шкаф', true], ['mirror', 'Зеркало в рост', true], ['armchair', 'Кресло', false], ['desk', 'Рабочее место', false], ['rug', 'Ковёр', false]],
+    kids: [['pc', 'Стол с компьютером (иначе обычный стол)', true], ['pen', 'Шкаф-пенал для тетрадей и учебников', true], ['shelf', 'Стеллаж для книг и игрушек', false], ['rug', 'Ковёр', false], ['mirror', 'Зеркало в рост', false]],
     living: [['tv', 'ТВ-тумба и телевизор', true], ['lsofa', 'Угловой диван', true], ['dining', 'Обеденный стол со стульями', false], ['oval', 'Овальный стол со стульями', true], ['armchair', 'Два кресла', true], ['shelf', 'Стеллаж', true], ['board', 'Сервант / комод с полкой', true], ['plant', 'Растение', false], ['rug', 'Ковёр', false]],
     bath: [['shower', 'Душ вместо ванны', true], ['washer', 'Стиральная машина', false]],
     office: [['wardrobe', 'Шкаф', false]],
     hall: [['mirror', 'Зеркало в рост', true]],
-    cosmo: [['sink', 'Умывальник с тумбой', true], ['shelf', 'Стеллаж', true], ['cab', 'Шкафчик навесной', true], ['mirror', 'Зеркало', true], ['lamp', 'Торшер', false]]
+    cosmo: [['sink', 'Умывальник с тумбой', false], ['shelf', 'Стеллаж', true], ['cab', 'Шкафчик навесной', true], ['mirror', 'Зеркало', true], ['lamp', 'Торшер', false]]
   };
   const STYLES = {
     light: { name: 'Светлый (скандинавский)', floor: 'lam_oak_light', wet: 'tile_sq60_lgrey', wall: '#f2efe9', s: '#d9d4c7', w: '#d8c3a0', k: '#ece8de' },
@@ -42,7 +46,7 @@
     dark: { name: 'Тёмный современный', floor: 'lam_oak_dark', wet: 'tile_sq60_graph', wall: '#a7a8a8', s: '#5c5f64', w: '#6b4429', k: '#3a3d42' },
     keep: { name: 'Не менять цвета' }
   };
-  const guess = n => { n = (n || '').toLowerCase(); return /косметол/.test(n) ? 'cosmo' : /кухн/.test(n) ? 'kitchen' : /спальн|детск/.test(n) ? 'bedroom' : /ванн|туалет|санузел|wc/.test(n) ? 'bath' : /кабинет|рабоч/.test(n) ? 'office' : /коридор|прихож|холл/.test(n) ? 'hall' : 'living'; };
+  const guess = n => { n = (n || '').toLowerCase(); return /косметол/.test(n) ? 'cosmo' : /кухн/.test(n) ? 'kitchen' : /детск/.test(n) ? 'kids' : /спальн/.test(n) ? 'bedroom' : /ванн|туалет|санузел|wc/.test(n) ? 'bath' : /кабинет|рабоч/.test(n) ? 'office' : /коридор|прихож|холл/.test(n) ? 'hall' : 'living'; };
 
   // ---------- геометрия ----------
   const horiz = s => s === 'n' || s === 's';
@@ -78,11 +82,68 @@
     return [a.kind, b.kind].sort().join() === 'base_oven,hob_gas';
   };
 
+  // ---------- НОВОЕ: многоугольник → прямоугольные части ----------
+  const sidePt = (r, s, a, d) => s === 'n' ? [a, r.y + d] : s === 's' ? [a, r.y + r.depth - d] : s === 'w' ? [r.x + d, a] : [r.x + r.width - d, a];   // точка на стороне s в позиции a, на глубине d внутрь
+
+  function rectsOfPoly(P) {                         // делит многоугольник (все стороны горизонтальные/вертикальные) на прямоугольники; null — если есть косые стороны
+    const E = .003;
+    if (!P.every((a, i) => { const b = P[(i + 1) % P.length]; return Math.abs(a[0] - b[0]) < E || Math.abs(a[1] - b[1]) < E; })) return null;
+    const uniq = a => { a = a.slice().sort((p, q) => p - q); const o = []; a.forEach(v => { if (!o.length || v - o[o.length - 1] > E) o.push(v); }); return o; };
+    const slabs = Q => {                            // горизонтальные полосы между всеми y вершин, одинаковые подряд склеиваются
+      const ys = uniq(Q.map(q => q[1])), out = [];
+      for (let k = 0; k + 1 < ys.length; k++) {
+        const y0 = ys[k], y1 = ys[k + 1], ym = (y0 + y1) / 2, xs = [];
+        Q.forEach((a, i) => { const b = Q[(i + 1) % Q.length]; if (Math.abs(a[0] - b[0]) < E && ((a[1] <= ym && b[1] > ym) || (b[1] <= ym && a[1] > ym))) xs.push(a[0]); });
+        xs.sort((p, q) => p - q);
+        for (let j = 0; j + 1 < xs.length; j += 2) {
+          const x0 = xs[j], x1 = xs[j + 1], pv = out.find(z => Math.abs(z.y1 - y0) < E && Math.abs(z.x0 - x0) < E && Math.abs(z.x1 - x1) < E);
+          if (pv) pv.y1 = y1; else out.push({ x0, x1, y0, y1 });
+        }
+      }
+      return out;
+    };
+    const A = slabs(P), B = slabs(P.map(q => [q[1], q[0]])).map(z => ({ x0: z.y0, x1: z.y1, y0: z.x0, y1: z.x1 }));   // B — то же, но вертикальными полосами
+    if (!A.length || !B.length) return null;
+    const key = R => [R.length, -Math.min(...R.map(z => Math.min(z.x1 - z.x0, z.y1 - z.y0)))];                      // меньше частей; при равенстве — без тонких «щепок»
+    const ka = key(A), kb = key(B);
+    return (ka[0] < kb[0] || (ka[0] === kb[0] && ka[1] <= kb[1])) ? A : B;
+  }
+  function internalOf(R, k) {                       // у части k: участки сторон, общие с другими частями (там нет стены, это проход)
+    const a = R[k], E = .003, out = { n: [], s: [], w: [], e: [] };
+    R.forEach((b, j) => {
+      if (j === k) return;
+      const ox = [Math.max(a.x0, b.x0), Math.min(a.x1, b.x1)], oy = [Math.max(a.y0, b.y0), Math.min(a.y1, b.y1)];
+      if (Math.abs(b.y1 - a.y0) < E && ox[1] - ox[0] > E) out.n.push(ox);
+      if (Math.abs(b.y0 - a.y1) < E && ox[1] - ox[0] > E) out.s.push(ox);
+      if (Math.abs(b.x1 - a.x0) < E && oy[1] - oy[0] > E) out.w.push(oy);
+      if (Math.abs(b.x0 - a.x1) < E && oy[1] - oy[0] > E) out.e.push(oy);
+    });
+    return out;
+  }
+  function virtSpans(f, walls, r, s) {              // проёмы на стороне s части: берутся со стен многоугольника + проход на границе с другой частью
+    const out = [], hz = s === 'n' || s === 's', lo = hz ? r.x : r.y, hi = hz ? r.x + r.width : r.y + r.depth, nrm = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[s];
+    walls.forEach(w => {
+      if (w.room !== r.virt.parent || w.nx == null) return;
+      const L = FP.wlen(w); if (L < .01) return;
+      const ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L;
+      if (w.nx * nrm[0] + w.ny * nrm[1] < .9) return;                                   // стена смотрит внутрь в ту же сторону
+      if ((hz ? Math.abs(uy) : Math.abs(ux)) > .01) return;                             // и параллельна стороне
+      const h = FP.inner() ? w.t / 2 : 0, axis = s === 'n' ? r.y - h : s === 's' ? r.y + r.depth + h : s === 'w' ? r.x - h : r.x + r.width + h;
+      if (Math.abs((hz ? w.y1 : w.x1) - axis) > .03) return;                            // лежит на этой стороне
+      FP.spans(f, walls, w).forEach(a => {
+        const p1 = hz ? w.x1 + ux * a.s : w.y1 + uy * a.s, p2 = hz ? w.x1 + ux * a.e : w.y1 + uy * a.e, a0 = Math.max(lo, Math.min(p1, p2)), a1 = Math.min(hi, Math.max(p1, p2));
+        if (a1 - a0 > .02) out.push({ s: a0 - lo, e: a1 - lo, o: a.o, own: a.own });
+      });
+    });
+    r.virt.inner[s].forEach(q => out.push({ s: q[0] - lo, e: q[1] - lo, o: { kind: 'gap', h: 99, sill: 0, internal: true }, own: false }));
+    return out;
+  }
+
   // ---------- контекст: всё, что нужно для проверок, считается один раз ----------
   function mkCtx(f, r, o) {
     const st = STYLES[o.style] || STYLES.keep, walls = FP.getWalls(f), cx = r.x + r.width / 2, cy = r.y + r.depth / 2, R0 = Math.hypot(r.width, r.depth) / 2 + 1;
     const WR = FP.wallRects(f, walls).filter(q => Math.hypot(q.cx - cx, q.cy - cy) < R0 + q.hl + q.ht), zones = [], sp = {};
-    SIDES.forEach(s => { const w = walls.find(q => q.room === r && q.side === s), WL = w ? FP.wlen(w) : 0; sp[s] = w ? FP.spans(f, walls, w).filter(q => q.e > .02 && q.s < WL - .02) : []; });
+    SIDES.forEach(s => { const w = walls.find(q => q.room === r && q.side === s), WL = w ? FP.wlen(w) : 0; sp[s] = r.virt ? virtSpans(f, walls, r, s) : (w ? FP.spans(f, walls, w).filter(q => q.e > .02 && q.s < WL - .02) : []); });
     f.openings.forEach(op => {                      // зоны открывания дверей (как в FP.conflicts)
       if (op.kind !== 'door' && op.kind !== 'gap') return;       // у проёма без двери тоже нужен свободный проход
       const w = walls.find(q => q.id === op.wallId); if (!w) return;
@@ -94,6 +155,17 @@
         if (op.kind === 'gap') zones.push([p.sx + p.ux * wd * (k + .5) / 5 + vx * d, p.sy + p.uy * wd * (k + .5) / 5 + vy * d]);   // проём без двери: с обеих сторон
       });
     });
+    if (r.virt) {                                   // НОВОЕ: у части многоугольника на границе с другой частью держим проход свободным; запоминаем «двери» для проверки прохода
+      const cells = [];
+      SIDES.forEach(s => {
+        const lo = (s === 'n' || s === 's') ? r.x : r.y;
+        sp[s].forEach(q => {
+          if (q.o.internal) for (let k = 0; k < 5; k++) { const a = lo + q.s + (q.e - q.s) * (k + .5) / 5; [.15, .4, .65, .9].forEach(d => zones.push(sidePt(r, s, a, d))); }
+          if (q.o.kind === 'door' || q.o.kind === 'gap') cells.push(sidePt(r, s, lo + (q.s + q.e) / 2, .4));
+        });
+      });
+      r.virt.cells = cells;
+    }
     const near = m => m.x > r.x - 3 && m.x < r.x + r.width + 3 && m.y > r.y - 3 && m.y < r.y + r.depth + 3, base = f.furniture.filter(near);
     const ctx = { f, r, o, st, walls, WR, sp, base, all: base.slice(), added: [], log: [], seen: {}, parts: [], skipped: [] };
     ctx.zones = zones.filter(pt => pt[0] > r.x - .3 && pt[0] < r.x + r.width + .3 && pt[1] > r.y - .3 && pt[1] < r.y + r.depth + .3);
@@ -339,11 +411,20 @@
     }
     return false;
   }
-  function deskSet(ctx, side, pos, office) {
-    const desk = I('desk', 'Рабочий стол', 1.2, .6, .75, '#b99570', 'w'), ch = office ? I('office_chair', 'Кресло офисное', .6, .6, 1.1, '#444a50', 'x') : I('chair', 'Стул', .45, .5, .85, '#b18c68', 'w'), mark = ctx.added.length;
-    const dm = putFlex(ctx, desk, side, pos, 1.2, 1.8); if (!dm) return null;
+  function deskSet(ctx, side, pos, office, pc) {
+    const desk = pc ? I('desk_pc', 'Стол с компьютером', 1.4, .7, .75, '#b99570', 'w') : I('desk', 'Рабочий стол', 1.2, .6, .75, '#b99570', 'w'), ch = office ? I('office_chair', 'Кресло офисное', .6, .6, 1.1, '#444a50', 'x') : I('chair', 'Стул', .45, .5, .85, '#b18c68', 'w'), mark = ctx.added.length;
+    const dm = putFlex(ctx, desk, side, pos, desk.w, desk.w + .6); if (!dm) return null;
     const n = DIR[side], e = desk.d / 2 + ch.d / 2 - .1;
     if (!tryAdd(ctx, mk(ctx, ch, dm.x + n[0] * e, dm.y + n[1] * e, (n[2] + 180) % 360))) { rollback(ctx, mark); return null; }
+    return dm;
+  }
+
+  function vanitySet(ctx, side, pos) {              // НОВОЕ: неглубокий дамский столик (глубина 0,45 м) + стул + зеркало над ним
+    const tb = I('desk', 'Туалетный столик', 1, .45, .75, '#b99570', 'w'), ch = I('chair', 'Стул', .45, .5, .85, '#b18c68', 'w'), mark = ctx.added.length;
+    const dm = put(ctx, tb, side, pos); if (!dm) return null;
+    const n = DIR[side], e = tb.d / 2 + ch.d / 2 - .1;
+    if (!tryAdd(ctx, mk(ctx, ch, dm.x + n[0] * e, dm.y + n[1] * e, (n[2] + 180) % 360))) { rollback(ctx, mark); return null; }
+    put(ctx, I('mirror', 'Зеркало', .6, .03, .8, '#8b6b4a', 'x', 1.1), side, al(dm, side), { w: .6 });
     return dm;
   }
 
@@ -521,7 +602,7 @@
         return out;
       },
       run(ctx, v) {
-        const r = ctx.r, on = ctx.o.on, A = r.width * r.depth, bw = (ctx.o.bed && ctx.o.bed !== 'auto') ? +ctx.o.bed : (A >= 16 ? 1.85 : A >= 11 ? 1.65 : A >= 8 ? 1.45 : .95);
+        const r = ctx.r, on = ctx.o.on, A = r.width * r.depth, bw = (ctx.o.bed && ctx.o.bed !== 'auto') ? +ctx.o.bed : (A >= 9 ? 1.65 : A >= 7 ? 1.45 : .95);
         const bed = I('bed', 'Кровать ' + ({ 1.85: 180, 1.65: 160, 1.45: 140, 1.25: 120, 1.05: 100, .95: 90 })[bw], bw, bw < 1.35 ? 2.05 : 2.15, .65, '#e5dfd1', 's'), ns = I('nightstand', 'Тумба', .45, .45, .5, '#ba9b7c', 'w');
         const bm = perp(ctx, v.main) >= bed.d + .5 ? put(ctx, bed, v.main, v.pos) : null;
         if (!bm) miss(ctx, 'кровать', 40);
@@ -534,8 +615,18 @@
         }
         const sides = v.ws === 'long' ? byLen(ctx).filter(s => s !== v.main).concat(v.main) : [OPP[v.main]].concat(SIDES.filter(s => s !== OPP[v.main] && s !== v.main), [v.main]);
 
+        if (on.tv) {                                                            // НОВОЕ: телевизор на стене напротив кровати (по центру кровати)
+          const TV = I('tv', 'Телевизор', 1.23, .06, .72, '#1a1a1a', 'x', 1.0), ob = OPP[v.main];
+          if (!(bm && put(ctx, TV, ob, al(bm, v.main))) && !fitAny(ctx, TV, [1.23], [ob].concat(SIDES.filter(s => s !== v.main && s !== ob)), ['mid', 'start', 'end'])) miss(ctx, 'телевизор', 1);
+        }
+
         if (!flexAny(ctx, I('wardrobe', 'Шкаф', 1.8, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 2.6)) miss(ctx, 'шкаф', 12);
+
         else if (on.ward2 && A >= 12 && !flexAny(ctx, I('wardrobe', 'Шкаф 2', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['end', 'start'], .8, 2.0)) miss(ctx, 'второй шкаф', 2);
+
+        if (on.vanity) { let vt = null; for (const s of sides) for (const p of ['start', 'end', 'mid']) vt = vt || vanitySet(ctx, s, p); if (!vt) miss(ctx, 'туалетный столик', 2); }   // НОВОЕ
+        if (on.chair && !fitAny(ctx, I('chair', 'Стул', .45, .5, .85, '#b18c68', 'w'), [.45], sides, ['end', 'start', 'mid'])) miss(ctx, 'стул', 1);                    // НОВОЕ
+
         if (on.dresser && A >= 10 && !flexAny(ctx, I('dresser', 'Комод', 1.2, .5, .85, '#c9b08a', 'w'), sides, ['mid', 'start', 'end'], .8, 1.6)) miss(ctx, 'комод', 3);
         if (on.mirror && !fitAny(ctx, I('mirror_full', 'Зеркало в рост', .5, .04, 1.7, '#6f5a44', 'x', .1), [.5], sides, ['end', 'start', 'mid'])) miss(ctx, 'зеркало', 1);
         if (on.armchair && !fitAny(ctx, I('armchair', 'Кресло', .85, .85, .8, '#bf8c6c', 's'), [.85], sides, ['start', 'end'])) miss(ctx, 'кресло', 2);
@@ -671,6 +762,36 @@
     }
   };
 
+  RECIPES.kids = {                                  // НОВОЕ: детская: кровать 100, стол (с компьютером) + офисное кресло, шкаф-пенал, гардероб
+    vars: RECIPES.bedroom.vars,
+    run(ctx, v) {
+      const r = ctx.r, on = ctx.o.on, A = r.width * r.depth;
+      const bw = (ctx.o.bed && ctx.o.bed !== 'auto') ? +ctx.o.bed : (A >= 6 ? 1.05 : .95);
+      const bed = I('bed', 'Кровать ' + ({ 1.85: 180, 1.65: 160, 1.45: 140, 1.25: 120, 1.05: 100, .95: 90 })[bw], bw, bw < 1.35 ? 2.05 : 2.15, .65, '#e5dfd1', 's'), ns = I('nightstand', 'Тумба', .45, .45, .5, '#ba9b7c', 'w');
+      const bm = perp(ctx, v.main) >= bed.d + .5 ? put(ctx, bed, v.main, v.pos) : null;
+      if (!bm) miss(ctx, 'кровать', 40);
+      else {
+        const a = al(bm, v.main);
+        if (!put(ctx, ns, v.main, a - bw / 2 - .245)) put(ctx, ns, v.main, a + bw / 2 + .245);
+        bonus(ctx, 'окна/двери на стене изголовья', -cnt(ctx, v.main, 'window') * 3 - cnt(ctx, v.main, 'door') * 2);
+        if (on.rug) addRug(ctx, bm, v.main, Math.min(bw + .8, len(ctx, v.main) - .2), 1.6, .3);
+      }
+      const sides = v.ws === 'long' ? byLen(ctx).filter(s => s !== v.main).concat(v.main) : [OPP[v.main]].concat(SIDES.filter(s => s !== OPP[v.main] && s !== v.main), [v.main]);
+      const ds = sides.slice().sort((a, b) => cnt(ctx, b, 'window') - cnt(ctx, a, 'window'));   // стол — предпочтительно у окна
+      let dk = null;
+      for (const pc of (on.pc ? [true, false] : [false])) for (const s of ds) for (const p of ['start', 'end', 'mid']) dk = dk || deskSet(ctx, s, p, true, pc);
+      if (dk) bonus(ctx, 'рабочее место у окна', cnt(ctx, ROT[dk.rotation], 'window') * 3); else miss(ctx, 'рабочий стол', 15);
+      if (on.pen) {                                                             // пенал — рядом со столом, если можно
+        const PEN = I('tall_cab', 'Шкаф-пенал (учебники)', .6, .45, 2.1, '#d6cdbb', 'k'); let pn = null;
+        if (dk) { const sd = ROT[dk.rotation]; if (sd) for (const g of [1, -1]) pn = pn || put(ctx, PEN, sd, al(dk, sd) + g * (dk.width / 2 + .3)); }
+        if (!pn && !fitAny(ctx, PEN, [.6], sides, ['start', 'end'])) miss(ctx, 'шкаф-пенал', 4);
+      }
+      if (!flexAny(ctx, I('wardrobe', 'Гардероб', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 1.8)) miss(ctx, 'гардероб', 12);
+      if (on.shelf && !flexAny(ctx, I('shelf', 'Стеллаж', 1, .35, 1.9, '#b99570', 'w'), sides, ['start', 'end', 'mid'], .8, 1.4)) miss(ctx, 'стеллаж', 2);
+      if (on.mirror && !fitAny(ctx, I('mirror_full', 'Зеркало в рост', .5, .04, 1.7, '#6f5a44', 'x', .1), [.5], sides, ['end', 'start', 'mid'])) miss(ctx, 'зеркало', 1);
+    }
+  };
+
   // ---------- оценка: проход по комнате и связность дверей ----------
   function walkInfo(ctx) {
     const r = ctx.r, S = .1, nx = Math.max(2, Math.round(r.width / S)), ny = Math.max(2, Math.round(r.depth / S)), blk = new Uint8Array(nx * ny);
@@ -685,7 +806,7 @@
     }
 
     const idx = (x, y) => Math.min(nx - 1, Math.max(0, Math.floor((x - r.x) / r.width * nx))) * ny + Math.min(ny - 1, Math.max(0, Math.floor((y - r.y) / r.depth * ny)));
-    const cells = ctx.f.openings.filter(o => (o.kind === 'door' || o.kind === 'gap') && o.wallId.startsWith(r.id + ':')).map(o => {
+    const cells = r.virt ? (r.virt.cells || []).map(p => idx(p[0], p[1])) : ctx.f.openings.filter(o => (o.kind === 'door' || o.kind === 'gap') && o.wallId.startsWith(r.id + ':')).map(o => {
       const w = ctx.walls.find(q => q.id === o.wallId), p = FP.openPos(w, o); return idx(p.cx + p.nx * .4, p.cy + p.ny * .4);
     });
     let conn = true;
@@ -723,14 +844,14 @@
   const occ = (ctx, x, y, z) => ctx.all.some(m => { if (skipK(m)) return false; const e = zr(ctx, m); if (z < e[0] || z > e[1]) return false; return fr(m).some(q => inR(q, x, y, -.02)); });
   function addLights(ctx, items, out) {
     const r = ctx.r, f = ctx.f, t = ctx.o.type, A = r.width * r.depth, nx = Math.max(1, Math.round(r.width / 3.5)), ny = Math.max(1, Math.round(r.depth / 3.5));
-    const ring = nx * ny === 1 && A >= 8 && (t === 'bedroom' || t === 'living');
+    const ring = nx * ny === 1 && A >= 8 && (t === 'bedroom' || t === 'kids' || t === 'living');
     const LG = ring ? I('ch_ring', 'Люстра-кольцо LED', .8, .8, .7, LT, 'x') : I('ceil_light', 'Светильник потолочный', .4, .4, .08, LT, 'x');
     const push = m => { out.push(m); ctx.all.push(m); };
     for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) push(mk(ctx, LG, r.x + (i + .5) * r.width / nx, r.y + (j + .5) * r.depth / ny, 0));
     const SW = I('switch1', 'Выключатель', .08, .03, .08, LT, 'x', .9);
     SIDES.forEach(s => {                            // выключатели у дверей (справа или слева, где свободно)
       const [lo, hi] = span(ctx, s);
-      f.openings.filter(o => o.wallId === r.id + ':' + s && o.kind === 'door').forEach(o => {
+      (r.virt ? ctx.sp[s].filter(q => q.o.kind === 'door').map(q => ({ offset: q.s, width: q.e - q.s })) : f.openings.filter(o => o.wallId === r.id + ':' + s && o.kind === 'door')).forEach(o => {
         for (const a of [lo + o.offset + o.width + .25, lo + o.offset - .25]) {
           if (a < lo + .1 || a > hi - .1) continue;
           const m = make(ctx, SW, s, a, SW.w);
@@ -782,7 +903,7 @@
   };
 
   function applyResult(k, noSnap) {                 // убрать предыдущий вариант и поставить выбранный
-    const S = FP.afState, f = FP.floor(), r = f.rooms.find(q => q.id === S.roomId); if (!r) return;
+    const S = FP.afState, f = FP.floor(), r = findRoom(f, S.roomId); if (!r) return;
     if (!noSnap) FP.snap();
     const old = new Set(S.applied); f.furniture = f.furniture.filter(m => !old.has(m.id));
     const res = S.results[k], ctx = mkCtx(f, r, S.o), items = res.items.map(m => Object.assign({}, m)), lights = [];
@@ -794,7 +915,7 @@
     FP.changed(); panel();
   }
   function manual(S) {                              // что изменили вручную после показа варианта
-    const f = FP.floor(), r = f.rooms.find(q => q.id === S.roomId), L = ['', 'ПРАВКИ ВРУЧНУЮ (сравнение с вариантом ' + (S.cur + 1) + ', как его поставила программа):'];
+    const f = FP.floor(), r = findRoom(f, S.roomId), L = ['', 'ПРАВКИ ВРУЧНУЮ (сравнение с вариантом ' + (S.cur + 1) + ', как его поставила программа):'];
     if (!r) return L.concat('  комната удалена').join('\n');
     const ctx = mkCtx(f, r, S.o), cur = new Map(f.furniture.map(m => [m.id, m])), ids = new Set((S.snap || []).map(m => m.id));
     const nv = v => v == null ? '' : typeof v === 'number' ? +v.toFixed(3) : v;
@@ -863,11 +984,39 @@
     cl.onclick = close; b.appendChild(cp); b.appendChild(cl); dlg.appendChild(b); document.body.appendChild(dlg); dlg.showModal();
   };
 
+  // НОВОЕ: автозаполнение многоугольной комнаты. Возвращает { results, fail, head, skipped } или null (если есть косые стороны)
+  FP.autofillPoly = function (r, o) {
+    const f = FP.floor(), rects = rectsOfPoly(r.poly);
+    if (!rects || !rects.length) return null;
+    FP.snap();
+    if (o.clear) { const old = new Set(FP.furnInRoom(f, r)); f.furniture = f.furniture.filter(m => !old.has(m)); }
+    applyStyle(f, r, o);
+    const snap0 = FP.snap; FP.snap = () => {};                                   // один шаг отмены на весь многоугольник
+    const res = { results: [], fail: [], head: [], skipped: [] };
+    try {
+      rects.map((q, k) => ({ q, k, area: (q.x1 - q.x0) * (q.y1 - q.y0) })).sort((a, b) => b.area - a.area).forEach((pt, n) => {   // самая большая часть первой
+        const q = pt.q, v = { id: r.id + '~' + pt.k, name: r.name + ' / часть ' + (pt.k + 1), x: q.x0, y: q.y0, width: q.x1 - q.x0, depth: q.y1 - q.y0, wt: {}, virt: { parent: r, inner: internalOf(rects, pt.k) } };
+        if (Math.min(v.width, v.depth) < .5) { res.head.push(v.name + ' (' + v.width.toFixed(2) + '×' + v.depth.toFixed(2) + '): слишком узкая, пропущена'); return; }
+        VROOMS.set(v.id, v);
+        if (o.type === 'hall' || n === 0) {                                      // коридор: все части; другие типы: полностью только самая большая
+          const st = FP.autofill(v, Object.assign({}, o, { anchor: 'auto', clear: false }));
+          if (st.results.length) { const best = st.results[st.cur]; res.results.push(best); best.skipped.forEach(s => res.skipped.push(s)); res.head.push(v.name + ' ' + v.width.toFixed(2) + '×' + v.depth.toFixed(2) + ': ' + best.label); }
+          else { res.fail.push(v.name); res.head.push(v.name + ': нет вариантов'); }
+        } else if (o.lights) {
+          const ctx = mkCtx(f, v, o), out = []; addLights(ctx, [], out); out.forEach(m => f.furniture.push(m));
+          res.head.push(v.name + ' ' + v.width.toFixed(2) + '×' + v.depth.toFixed(2) + ': только свет');
+        }
+      });
+    } finally { FP.snap = snap0; VROOMS.clear(); }
+    const pn = document.getElementById('afPanel'); if (pn) pn.remove(); FP.afState = null;
+    FP.changed();
+    return res;
+  };
+
   // ---------- диалог вопросов ----------
   const mkSel = (opts, v) => { const s = el('select'); opts.forEach(a => { const p = el('option'); p.value = a[0]; p.textContent = a[1]; s.appendChild(p); }); s.value = v; return s; };
   const mkChk = v => { const i = el('input'); i.type = 'checkbox'; i.checked = v; return i; };
   FP.ui.autofill = function (r) {
-    if (r.poly) { alert('Автозаполнение пока работает только для прямоугольных комнат'); return; }
     const dlg = document.createElement('dialog'), box = el('div'), F = {}, ob = el('div');
     box.style.minWidth = '340px'; dlg.appendChild(el('h3', '', 'Автозаполнение: ' + r.name));
 
@@ -876,10 +1025,11 @@
     F.anchor = mkSel([['auto', 'Авто (перебрать все стены)'], ['n', 'Север (сверху)'], ['s', 'Юг (снизу)'], ['w', 'Запад (слева)'], ['e', 'Восток (справа)']], P.anchor || 'auto');
     F.style = mkSel(Object.keys(STYLES).map(k => [k, STYLES[k].name]), P.style || 'dark');
     F.lights = mkChk(P.lights !== undefined ? P.lights : true); F.clear = mkChk(P.clear !== undefined ? P.clear : true);
-    F.bed = mkSel([['auto', 'Авто (по площади)'], ['1.85', 'Кровать 180'], ['1.65', 'Кровать 160'], ['1.45', 'Кровать 140'], ['1.25', 'Кровать 120'], ['1.05', 'Кровать 100'], ['.95', 'Кровать 90']], P.bed || 'auto');
+    F.bed = mkSel([['auto', 'Авто (по площади)'], ['1.85', 'Кровать 180'], ['1.65', 'Кровать 160'], ['1.45', 'Кровать 140'], ['1.25', 'Кровать 120'], ['1.05', 'Кровать 100'], ['.95', 'Кровать 90']], P.bed || '1.65');
     const fillOpts = () => {
       ob.innerHTML = '';
-      if (F.type.value === 'bedroom') ob.appendChild(row('Тип кровати', F.bed));
+      if (!(P.bed && P.type === F.type.value)) F.bed.value = F.type.value === 'kids' ? '1.05' : '1.65';   // НОВОЕ: по умолчанию спальня 160, детская 100
+      if (F.type.value === 'bedroom' || F.type.value === 'kids') ob.appendChild(row('Тип кровати', F.bed));
       const saved = (P.type === F.type.value && P.on) ? P.on : null;      // галочки запоминаются, пока тип комнаты тот же
       (OPTS[F.type.value] || []).forEach(a => { const c = mkChk(saved && a[0] in saved ? saved[a[0]] : a[2]); c.dataset.k = a[0]; ob.appendChild(row(a[1], c)); });
     };
@@ -901,6 +1051,14 @@
       close(); r.rtype = F.type.value;                       // запоминаем тип комнаты
       const opts = { type: F.type.value, anchor: F.anchor.value, style: F.style.value, lights: F.lights.checked, clear: F.clear.checked, bed: F.bed.value, on, extra: ex.slice() };
       r.afPrefs = JSON.parse(JSON.stringify(opts));          // запоминаем все настройки для этой комнаты
+
+      if (r.poly) {                                          // НОВОЕ: многоугольник
+        const R = FP.autofillPoly(r, opts);
+        if (!R) alert('Автозаполнение многоугольника работает, если все его стороны горизонтальные или вертикальные (выравнивайте вершины с Shift).');
+        else FP.ui.autofillReport('Многоугольник «' + r.name + '»\n' + R.head.join('\n') + (R.fail.length ? '\n\nНе удалось: ' + R.fail.join(', ') : '') + (R.skipped.length ? '\nНе поместилось: ' + R.skipped.join(', ') : '') + '\n\nОтмена: Ctrl+Z (одним шагом).');
+        return;
+      }
+
       const S = FP.autofill(r, opts);
 
       if (!S.results.length) { FP.ui.autofillReport(S.head.join('\n') + '\n\nНи один вариант не построен'); return; }
@@ -920,9 +1078,10 @@
     [['Цвета и материалы', SS], ['Свет, выключатели, розетки', LL], ['Убрать старую мебель из комнат', CC]].forEach(a => box.appendChild(row(a[0], a[1])));
     box.appendChild(el('h4', '', 'Комнаты: галочка = заполнять, справа тип комнаты'));
     f.rooms.forEach(r => {
-      const poly = !!r.poly, c = mkChk(!poly && !FP.hasRail(r) && !/балкон|чердак|кладов/i.test(r.name)), t = mkSel(TYPES, r.rtype || guess(r.name));
-      if (poly) { c.disabled = true; t.disabled = true; }
-      const d = el('div', 'row'), sp = el('span', '', r.name + (poly ? ' (многоугольник: пока нельзя)' : ''));
+
+      const poly = !!r.poly, c = mkChk(!FP.hasRail(r) && !/балкон|чердак|кладов/i.test(r.name)), t = mkSel(TYPES, r.rtype || guess(r.name));
+      const d = el('div', 'row'), sp = el('span', '', r.name + (poly ? ' (многоугольник)' : ''));
+
       sp.style.cssText = 'width:auto;flex:1'; d.appendChild(c); d.appendChild(sp); d.appendChild(t); box.appendChild(d); RW.push({ r, c, t });
     });
     box.appendChild(el('p', 'hint', 'Для каждой комнаты берётся лучший вариант расстановки. Если комнату уже заполняли через её панель, используются те же настройки (главная стена, галочки). Это может занять до минуты.'));
@@ -940,8 +1099,11 @@
           const type = a.t.value, P = (a.r.afPrefs && a.r.afPrefs.type === type) ? a.r.afPrefs : null, on = {};
           (OPTS[type] || []).forEach(q => { on[q[0]] = (P && P.on && q[0] in P.on) ? P.on[q[0]] : q[2]; });
           a.r.rtype = type;
-          const st = FP.autofill(a.r, { type, anchor: P ? P.anchor : 'auto', style: SS.value, lights: LL.checked, clear: CC.checked, bed: P ? P.bed : 'auto', on, extra: (P && P.extra) ? P.extra : [] });
-          if (!st.results.length) fail.push(a.r.name);
+
+          const oo = { type, anchor: P ? P.anchor : 'auto', style: SS.value, lights: LL.checked, clear: CC.checked, bed: P ? P.bed : 'auto', on, extra: (P && P.extra) ? P.extra : [] };
+          const st = a.r.poly ? FP.autofillPoly(a.r, oo) : FP.autofill(a.r, oo);
+          if (!st || !st.results.length) fail.push(a.r.name);
+
           done++;
         }
       } catch (e) { console.error('[autofillAll]', e); alert('Ошибка: ' + e.message); }
