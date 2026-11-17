@@ -37,6 +37,23 @@
   }
   const delRow = (root, withDup) => { const b = el('div', 'btns'); if (withDup) b.appendChild(btn('Дублировать', () => FP.duplicate())); b.appendChild(btn('Удалить', () => FP.removeSel(), 'danger')); b.appendChild(btn('Снять выбор', () => FP.select(null))); root.appendChild(b); };
 
+  // ---------- статистика: стены, окна, периметр ----------
+  function roomStats(f, walls, r) {
+    const H = f.height, S = { gross: 0, win: 0, door: 0, gap: 0, plinth: 0, ceil: FP.hasRail(r) ? 0 : FP.roomArea(r), perim: FP.roomPerim(r) };
+    walls.filter(w => w.room === r && !w.rail).forEach(w => {
+      const L = FP.wlen(w); S.gross += L * H; S.plinth += L;
+      FP.spans(f, walls, w).forEach(a => {
+        const len = Math.min(L, a.e) - Math.max(0, a.s); if (len <= 0) return;
+        const o = a.o, d = FP.opDefaults(o.kind === 'window' ? 'window' : 'door'), sill = o.kind === 'window' ? (o.sill != null ? o.sill : d.sill) : 0;
+        const h = o.merged ? H : Math.max(0, Math.min(o.h != null ? o.h : d.h, H - sill));   // merged = убранная стена между объединёнными комнатами
+        if (o.kind === 'window') S.win += len * h;
+        else { S[o.kind === 'door' ? 'door' : 'gap'] += len * h; S.plinth -= len; }
+      });
+    });
+    S.net = S.gross - S.win - S.door - S.gap; S.netCeil = S.net + S.ceil;
+    return S;
+  }
+
   function summary(root) {
     const f = FP.floor(), s = FP.settings();
     root.appendChild(el('h3', '', 'Этаж и настройки'));
@@ -91,6 +108,22 @@
 
     const MA = FP.mergeAreas(f, FP.getWalls(f));
     Object.keys(MA).forEach(id => { const names = f.rooms.filter(q => q.merge === id).map(q => q.name).join(' + '); root.appendChild(el('div', 'stat', '<span>Объединено: ' + names + '</span><b>' + MA[id].toFixed(2) + ' м²</b>')); });
+
+    {                                                          // --- стены / окна / периметр ---
+      const WLS = FP.getWalls(f), ST = f.rooms.map(r => [r, roomStats(f, WLS, r)]), T = {};
+      ['gross', 'win', 'door', 'gap', 'plinth', 'ceil', 'perim', 'net', 'netCeil'].forEach(k => { T[k] = ST.reduce((s, a) => s + a[1][k], 0); });
+      const rowsOf = S => [['Стены с окнами и дверями', S.gross, 'м²'], ['Стены без окон/дверей/проёмов', S.net, 'м²'], ['Стены без проёмов + потолок', S.netCeil, 'м²'],
+        ['Окна', S.win, 'м²'], ['Двери и проёмы', S.door + S.gap, 'м²'], ['Периметр', S.perim, 'м'], ['Плинтус (без дверей и проёмов)', S.plinth, 'м']];
+      root.appendChild(el('h4', '', 'Стены, окна, периметр: вся квартира'));
+      rowsOf(T).forEach(a => root.appendChild(el('div', 'stat', '<span>' + a[0] + '</span><b>' + a[1].toFixed(2) + ' ' + a[2] + '</b>')));
+      root.appendChild(el('h4', '', 'То же по комнатам (нажмите на комнату)'));
+      ST.forEach(a => {
+        const dt = el('details'); dt.appendChild(el('summary', '', a[0].name + ': стены ' + a[1].net.toFixed(1) + ' м², окна ' + a[1].win.toFixed(1) + ' м²'));
+        rowsOf(a[1]).forEach(q => dt.appendChild(el('div', 'stat', '<span>' + q[0] + '</span><b>' + q[1].toFixed(2) + ' ' + q[2] + '</b>')));
+        root.appendChild(dt);
+      });
+      root.appendChild(el('p', 'hint', 'Стены = чистый периметр × высота потолка; общая стена соседних комнат считается с обеих сторон; перила не считаются.'));
+    }
 
     root.appendChild(el('h4', '', 'Комнаты'));
     const l = el('div', 'list'); f.rooms.forEach(r => l.appendChild(btn(r.name + ' — ' + FP.roomArea(r).toFixed(2) + ' м²' + (r.merge ? ' ⛓' : ''), () => FP.select('room', r.id)))); root.appendChild(l);

@@ -521,8 +521,8 @@
         return out;
       },
       run(ctx, v) {
-        const r = ctx.r, on = ctx.o.on, A = r.width * r.depth, bw = A >= 16 ? 1.85 : A >= 11 ? 1.65 : A >= 8 ? 1.45 : .95;
-        const bed = I('bed', 'Кровать ' + ({ 1.85: 180, 1.65: 160, 1.45: 140, .95: 90 })[bw], bw, bw < 1 ? 2.05 : 2.15, .65, '#e5dfd1', 's'), ns = I('nightstand', 'Тумба', .45, .45, .5, '#ba9b7c', 'w');
+        const r = ctx.r, on = ctx.o.on, A = r.width * r.depth, bw = (ctx.o.bed && ctx.o.bed !== 'auto') ? +ctx.o.bed : (A >= 16 ? 1.85 : A >= 11 ? 1.65 : A >= 8 ? 1.45 : .95);
+        const bed = I('bed', 'Кровать ' + ({ 1.85: 180, 1.65: 160, 1.45: 140, 1.25: 120, 1.05: 100, .95: 90 })[bw], bw, bw < 1.35 ? 2.05 : 2.15, .65, '#e5dfd1', 's'), ns = I('nightstand', 'Тумба', .45, .45, .5, '#ba9b7c', 'w');
         const bm = perp(ctx, v.main) >= bed.d + .5 ? put(ctx, bed, v.main, v.pos) : null;
         if (!bm) miss(ctx, 'кровать', 40);
         else {
@@ -673,14 +673,17 @@
 
   // ---------- оценка: проход по комнате и связность дверей ----------
   function walkInfo(ctx) {
-    const r = ctx.r, S = .2, nx = Math.max(2, Math.round(r.width / S)), ny = Math.max(2, Math.round(r.depth / S)), blk = new Uint8Array(nx * ny);
-    const rects = ctx.all.filter(m => { if (skipK(m)) return false; const z = zr(ctx, m); return z[0] < 1.2 && z[1] > .15; })
-      .flatMap(m => fr(m).map(q => Object.assign({}, q, { hl: q.hl + .15, ht: q.ht + .15 })));
+    const r = ctx.r, S = .1, nx = Math.max(2, Math.round(r.width / S)), ny = Math.max(2, Math.round(r.depth / S)), blk = new Uint8Array(nx * ny);
+    const base = ctx.all.filter(m => { if (skipK(m)) return false; const z = zr(ctx, m); return z[0] < 1.2 && z[1] > .15; }).flatMap(m => fr(m));
+    const grow = k => base.map(q => Object.assign({}, q, { hl: q.hl + k, ht: q.ht + k }));
+    const rectsF = grow(.15), rectsP = grow(.25);          // .25 с каждой стороны = проход шириной минимум 50 см
     let free = 0;
     for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
       const x = r.x + (i + .5) * r.width / nx, y = r.y + (j + .5) * r.depth / ny;
-      if (rects.some(q => inR(q, x, y, 0))) blk[i * ny + j] = 1; else free++;
+      if (rectsP.some(q => inR(q, x, y, 0))) blk[i * ny + j] = 1;
+      if (!rectsF.some(q => inR(q, x, y, 0))) free++;
     }
+
     const idx = (x, y) => Math.min(nx - 1, Math.max(0, Math.floor((x - r.x) / r.width * nx))) * ny + Math.min(ny - 1, Math.max(0, Math.floor((y - r.y) / r.depth * ny)));
     const cells = ctx.f.openings.filter(o => (o.kind === 'door' || o.kind === 'gap') && o.wallId.startsWith(r.id + ':')).map(o => {
       const w = ctx.walls.find(q => q.id === o.wallId), p = FP.openPos(w, o); return idx(p.cx + p.nx * .4, p.cy + p.ny * .4);
@@ -702,7 +705,7 @@
     const w = walkInfo(ctx);
     ctx.parts.push(['свободное место для прохода', w.open * 12]);
     if (w.open < .3) ctx.parts.push(['теснота', -(.3 - w.open) * 50]);
-    if (!w.conn) ctx.parts.push(['двери отрезаны мебелью', -40]);
+    if (!w.conn) { ctx.parts.push(['нет прохода к дверям (между мебелью меньше 50 см)', -40]); ctx.disc = true; }
     ctx.log.push('  свободно для прохода: ' + Math.round(w.open * 100) + '%, двери связаны: ' + (w.conn ? 'да' : 'НЕТ'));
     return ctx.parts.reduce((s, p) => s + p[1], 0);
   }
@@ -760,17 +763,18 @@
     const vars = R.vars(ctx); head.push('Вариантов к проверке: ' + vars.length);
     for (const v of vars) {
       if (performance.now() - t0 > 20000) { head.push('Остановлено по времени (20 с) после ' + res.length + ' вариантов'); break; }
-      rollback(ctx, 0); ctx.log = []; ctx.seen = {}; ctx.parts = []; ctx.skipped = []; ctx.fatal = false;
+      rollback(ctx, 0); ctx.log = []; ctx.seen = {}; ctx.parts = []; ctx.skipped = []; ctx.fatal = false; ctx.disc = false;
       try {
         R.run(ctx, v);
         (o.extra || []).forEach(it => { if (!fitAny(ctx, I(it[0], it[1], it[2], it[3], it[4], it[5], 'x', it[6]), [it[2]], byLen(ctx), ['mid', 'start', 'end'])) miss(ctx, it[1], 2); });
       } catch (e) { console.error('[autofill] ошибка в варианте', v.label, e); head.push('ОШИБКА в варианте «' + v.label + '»: ' + e.message); continue; }
       const score = finish(ctx);
-      res.push({ label: v.label, score, fatal: ctx.fatal, parts: ctx.parts.slice(), log: ctx.log.slice(), skipped: ctx.skipped.slice(), items: ctx.added.map(m => Object.assign({}, m)), sig: sigOf(ctx.added) });
+      res.push({ label: v.label, score, fatal: ctx.fatal, disc: ctx.disc, parts: ctx.parts.slice(), log: ctx.log.slice(), skipped: ctx.skipped.slice(), items: ctx.added.map(m => Object.assign({}, m)), sig: sigOf(ctx.added) });
     }
     rollback(ctx, 0);
     res.sort((a, b) => (a.fatal - b.fatal) || (b.score - a.score));
-    const top = [], seen = {}; res.forEach(q => { if (top.length < 3 && !seen[q.sig]) { seen[q.sig] = 1; top.push(q); } });
+    const pool = res.filter(q => !q.disc), src = pool.length ? pool : res;   // варианты с отрезанными дверями берём, только если других нет
+    const top = [], seen = {}; src.forEach(q => { if (top.length < 5 && !seen[q.sig]) { seen[q.sig] = 1; top.push(q); } });
     head.push('Проверено вариантов: ' + res.length + ' за ' + Math.round(performance.now() - t0) + ' мс');
     FP.afState = { roomId: r.id, o, results: top, all: res, head, applied: [], cur: 0, lights: 0 };
     if (top.length) applyResult(0, true);
@@ -866,25 +870,39 @@
     if (r.poly) { alert('Автозаполнение пока работает только для прямоугольных комнат'); return; }
     const dlg = document.createElement('dialog'), box = el('div'), F = {}, ob = el('div');
     box.style.minWidth = '340px'; dlg.appendChild(el('h3', '', 'Автозаполнение: ' + r.name));
-    F.type = mkSel(TYPES, r.rtype || guess(r.name));        // тип из свойств комнаты, иначе по названию
-    F.anchor = mkSel([['auto', 'Авто (перебрать все стены)'], ['n', 'Север (сверху)'], ['s', 'Юг (снизу)'], ['w', 'Запад (слева)'], ['e', 'Восток (справа)']], 'auto');
-    F.style = mkSel(Object.keys(STYLES).map(k => [k, STYLES[k].name]), 'dark');
-    F.lights = mkChk(true); F.clear = mkChk(true);
-    const fillOpts = () => { ob.innerHTML = ''; (OPTS[F.type.value] || []).forEach(a => { const c = mkChk(a[2]); c.dataset.k = a[0]; ob.appendChild(row(a[1], c)); }); };
+
+    const P = r.afPrefs || {};                              // сохранённые настройки этой комнаты
+    F.type = mkSel(TYPES, P.type || r.rtype || guess(r.name));
+    F.anchor = mkSel([['auto', 'Авто (перебрать все стены)'], ['n', 'Север (сверху)'], ['s', 'Юг (снизу)'], ['w', 'Запад (слева)'], ['e', 'Восток (справа)']], P.anchor || 'auto');
+    F.style = mkSel(Object.keys(STYLES).map(k => [k, STYLES[k].name]), P.style || 'dark');
+    F.lights = mkChk(P.lights !== undefined ? P.lights : true); F.clear = mkChk(P.clear !== undefined ? P.clear : true);
+    F.bed = mkSel([['auto', 'Авто (по площади)'], ['1.85', 'Кровать 180'], ['1.65', 'Кровать 160'], ['1.45', 'Кровать 140'], ['1.25', 'Кровать 120'], ['1.05', 'Кровать 100'], ['.95', 'Кровать 90']], P.bed || 'auto');
+    const fillOpts = () => {
+      ob.innerHTML = '';
+      if (F.type.value === 'bedroom') ob.appendChild(row('Тип кровати', F.bed));
+      const saved = (P.type === F.type.value && P.on) ? P.on : null;      // галочки запоминаются, пока тип комнаты тот же
+      (OPTS[F.type.value] || []).forEach(a => { const c = mkChk(saved && a[0] in saved ? saved[a[0]] : a[2]); c.dataset.k = a[0]; ob.appendChild(row(a[1], c)); });
+    };
+
     F.type.onchange = fillOpts; fillOpts();
     [['Тип комнаты', F.type], ['Главная стена (изголовье / диван / кухня)', F.anchor], ['Цвета и материалы', F.style], ['Свет, выключатели, розетки', F.lights], ['Убрать мебель из комнаты', F.clear]].forEach(a => box.appendChild(row(a[0], a[1])));
     box.appendChild(el('h4', '', 'Что добавить')); box.appendChild(ob);
-    const ex = [], flat = [], exSel = el('select'), exList = el('div', 'hint'), exAdd = el('button', '', '+ Добавить');
+    const ex = (P.extra || []).slice(), flat = [], exSel = el('select'), exList = el('div', 'hint'), exAdd = el('button', '', '+ Добавить');
     FP.CATALOG.forEach(g => { const og = el('optgroup'); og.label = g.cat; g.items.forEach(it => { const o = el('option'); o.value = flat.length; o.textContent = it[1] + ' (' + it[2] + '×' + it[3] + ')'; flat.push(it); og.appendChild(o); }); exSel.appendChild(og); });
     const showEx = () => { exList.innerHTML = ''; ex.forEach((it, i) => { const b = el('button', '', it[1] + ' ✕'); b.onclick = () => { ex.splice(i, 1); showEx(); }; exList.appendChild(b); }); };
     exAdd.onclick = () => { ex.push(flat[+exSel.value]); showEx(); };
+    showEx();
     box.appendChild(el('h4', '', 'Свои предметы из каталога (добавить дополнительно)')); box.appendChild(row('Предмет', exSel)); box.appendChild(exAdd); box.appendChild(exList);
     dlg.appendChild(box);
     const b = el('div', 'dlgBtns'), ok = el('button', '', 'Заполнить'), no = el('button', '', 'Отмена'), close = () => { dlg.close(); dlg.remove(); };
     ok.onclick = () => {
       const on = {}; ob.querySelectorAll('input').forEach(i => { on[i.dataset.k] = i.checked; });
+
       close(); r.rtype = F.type.value;                       // запоминаем тип комнаты
-      const S = FP.autofill(r, { type: F.type.value, anchor: F.anchor.value, style: F.style.value, lights: F.lights.checked, clear: F.clear.checked, on, extra: ex.slice() });
+      const opts = { type: F.type.value, anchor: F.anchor.value, style: F.style.value, lights: F.lights.checked, clear: F.clear.checked, bed: F.bed.value, on, extra: ex.slice() };
+      r.afPrefs = JSON.parse(JSON.stringify(opts));          // запоминаем все настройки для этой комнаты
+      const S = FP.autofill(r, opts);
+
       if (!S.results.length) { FP.ui.autofillReport(S.head.join('\n') + '\n\nНи один вариант не построен'); return; }
       console.log('[autofill]\n' + report(0));
     };
