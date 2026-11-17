@@ -909,4 +909,49 @@
     no.onclick = close; b.appendChild(ok); b.appendChild(no); dlg.appendChild(b);
     document.body.appendChild(dlg); dlg.showModal();
   };
+
+
+  // НОВОЕ: автозаполнение всех комнат текущего этажа за один раз (один Ctrl+Z отменяет всё)
+  FP.ui.autofillAll = function () {
+    const f = FP.floor(); if (!f.rooms.length) { alert('На этаже нет комнат'); return; }
+    const dlg = document.createElement('dialog'), box = el('div'), RW = [];
+    box.style.minWidth = '380px'; dlg.appendChild(el('h3', '', 'Автозаполнение всей квартиры'));
+    const SS = mkSel(Object.keys(STYLES).map(k => [k, STYLES[k].name]), 'dark'), LL = mkChk(true), CC = mkChk(true);
+    [['Цвета и материалы', SS], ['Свет, выключатели, розетки', LL], ['Убрать старую мебель из комнат', CC]].forEach(a => box.appendChild(row(a[0], a[1])));
+    box.appendChild(el('h4', '', 'Комнаты: галочка = заполнять, справа тип комнаты'));
+    f.rooms.forEach(r => {
+      const poly = !!r.poly, c = mkChk(!poly && !FP.hasRail(r) && !/балкон|чердак|кладов/i.test(r.name)), t = mkSel(TYPES, r.rtype || guess(r.name));
+      if (poly) { c.disabled = true; t.disabled = true; }
+      const d = el('div', 'row'), sp = el('span', '', r.name + (poly ? ' (многоугольник: пока нельзя)' : ''));
+      sp.style.cssText = 'width:auto;flex:1'; d.appendChild(c); d.appendChild(sp); d.appendChild(t); box.appendChild(d); RW.push({ r, c, t });
+    });
+    box.appendChild(el('p', 'hint', 'Для каждой комнаты берётся лучший вариант расстановки. Если комнату уже заполняли через её панель, используются те же настройки (главная стена, галочки). Это может занять до минуты.'));
+    dlg.appendChild(box);
+    const bb = el('div', 'dlgBtns'), ok = el('button', '', 'Заполнить всё'), no = el('button', '', 'Отмена'), close = () => { dlg.close(); dlg.remove(); };
+    ok.onclick = async () => {
+      const todo = RW.filter(a => a.c.checked); if (!todo.length) return;
+      ok.disabled = no.disabled = true;
+      const snap0 = FP.snap; snap0(); FP.snap = () => {};                          // один шаг отмены на всю квартиру
+      const fail = []; let done = 0;
+      try {
+        for (const a of todo) {
+          ok.textContent = 'Заполняю ' + (done + 1) + ' / ' + todo.length + ': ' + a.r.name + '…';
+          await new Promise(res => setTimeout(res, 30));                           // дать браузеру перерисовать окно
+          const type = a.t.value, P = (a.r.afPrefs && a.r.afPrefs.type === type) ? a.r.afPrefs : null, on = {};
+          (OPTS[type] || []).forEach(q => { on[q[0]] = (P && P.on && q[0] in P.on) ? P.on[q[0]] : q[2]; });
+          a.r.rtype = type;
+          const st = FP.autofill(a.r, { type, anchor: P ? P.anchor : 'auto', style: SS.value, lights: LL.checked, clear: CC.checked, bed: P ? P.bed : 'auto', on, extra: (P && P.extra) ? P.extra : [] });
+          if (!st.results.length) fail.push(a.r.name);
+          done++;
+        }
+      } catch (e) { console.error('[autofillAll]', e); alert('Ошибка: ' + e.message); }
+      finally { FP.snap = snap0; }
+      const pn = document.getElementById('afPanel'); if (pn) pn.remove(); FP.afState = null;
+      close(); FP.changed();
+      if (fail.length) alert('Не удалось расставить мебель в: ' + fail.join(', '));
+    };
+    no.onclick = close; bb.appendChild(ok); bb.appendChild(no); dlg.appendChild(bb);
+    document.body.appendChild(dlg); dlg.showModal();
+  };
+
 })();

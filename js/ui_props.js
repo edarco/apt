@@ -80,6 +80,15 @@
 
     const b = el('div', 'btns'); b.appendChild(btn('+ Комната', () => FP.addRoom())); b.appendChild(btn('+ Стена', () => FP.addWall())); root.appendChild(b);
 
+    const bfa = el('div', 'btns');                       // НОВОЕ: вся мебель этажа
+    bfa.appendChild(btn('✨ Заполнить всю квартиру…', () => FP.ui.autofillAll()));
+    bfa.appendChild(btn('Удалить всю мебель', () => {
+      if (!f.furniture.length) { alert('Мебели на этаже нет'); return; }
+      if (!confirm('Удалить всю мебель на этаже «' + f.name + '» (' + f.furniture.length + ' шт., включая лампы, розетки и выключатели)? Можно отменить через Ctrl+Z.')) return;
+      edit(() => { f.furniture = []; });
+    }, 'danger'));
+    root.appendChild(bfa);
+
     const bg = el('div', 'btns');
     bg.appendChild(btn('Комнаты из контуров стен', () => { const n = FP.roomsFromWalls(); alert(n ? 'Создано комнат: ' + n : 'Замкнутых контуров из свободных стен не найдено'); }));
 
@@ -168,7 +177,10 @@
       root.appendChild(d);
     });
 
-    root.appendChild(el('p', 'hint', 'На плане: тяните квадраты-вершины, кружок «+» на стороне добавляет вершину, Shift+клик по вершине удаляет её.'));
+    const bcl = el('div', 'btns');                       // НОВОЕ: кнопка
+    bcl.appendChild(btn('Убрать лишние вершины (на прямых)', () => { let n = 0; edit(() => { n = FP.polyClean(r); }); if (!n) alert('Лишних вершин на прямых не найдено'); }));
+    root.appendChild(bcl);
+    root.appendChild(el('p', 'hint', 'На плане: тяните квадраты-вершины (с Shift сторона становится горизонтальной/вертикальной), потяните кружок «+» на стороне, чтобы добавить вершину. Ctrl+клик по вершине удаляет её.'));
   }
   function mergeBlock(root, r) {
     const f = FP.floor(), adj = FP.adjacentRooms(f, r);

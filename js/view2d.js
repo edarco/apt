@@ -600,12 +600,10 @@
     const hh = handleHit(p.x, p.y);
     if (hh) {
       const o = FP.selObj();
-      if (hh.kind === 'pm') {                           // «+» на стороне: добавить вершину и сразу тащить её
-        FP.snap(); const a = o.poly[hh.i], b = o.poly[(hh.i + 1) % o.poly.length];
-        FP.polyInsert(o, hh.i, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
-        drag = { mode: 'pv', i: hh.i + 1, o: JSON.parse(JSON.stringify(o)), moved: true }; FP.changed(); return;
+      if (hh.kind === 'pm') {                           // «+» на стороне: вершина создаётся, только если потянули (см. pointermove)
+        drag = { mode: 'pm', i: hh.i, px: p.x, py: p.y, o: JSON.parse(JSON.stringify(o)), moved: false }; return;
       }
-      if (hh.kind === 'pv' && e.shiftKey) { if (o.poly.length > 3) { FP.snap(); FP.polyRemove(o, hh.i); FP.changed(); } return; }
+      if (hh.kind === 'pv' && (e.ctrlKey || e.metaKey)) { if (o.poly.length > 3) { FP.snap(); FP.polyRemove(o, hh.i); FP.changed(); } return; }
 
       if (hh.kind === 'edge') { drag = edgeStart(hh.i, o, x, y, e.altKey); return; }   // НОВОЕ
 
@@ -635,6 +633,12 @@
       if (drag.mode === 'pan') { V.ox = drag.ox + p.x - drag.px; V.oy = drag.oy + p.y - drag.py; V.draw(); return; }
       if (drag.mode === 'draw') { tmp.x1 = snv(x, e); tmp.y1 = snv(y, e); V.draw(); return; }
       const o = FP.selObj(); if (!o) return;
+      if (drag.mode === 'pm') {                         // НОВОЕ: потянули «+» дальше 5 px: создаём вершину и тащим её
+        if (Math.hypot(p.x - drag.px, p.y - drag.py) < 5) return;
+        FP.snap(); const a = o.poly[drag.i], b = o.poly[(drag.i + 1) % o.poly.length];
+        FP.polyInsert(o, drag.i, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+        drag = { mode: 'pv', i: drag.i + 1, o: JSON.parse(JSON.stringify(o)), moved: true };
+      }
       if (!drag.moved) { FP.snap(); drag.moved = true; }
       const f = FP.floor();
       if (drag.mode === 'move') {
@@ -665,6 +669,14 @@
         if (drag.end === 1) { o.x1 = nx; o.y1 = ny; } else { o.x2 = nx; o.y2 = ny; }
       } else if (drag.mode === 'pv') {
         let nx = snv(x, e), ny = snv(y, e); const q = ptSnap(x, y, o); if (q && !e.altKey) { nx = q.x; ny = q.y; }
+        if (e.shiftKey) {                                 // НОВОЕ: Shift — выровнять по соседним вершинам (стороны станут горизонтальными/вертикальными)
+          const n = o.poly.length, A = o.poly[(drag.i + n - 1) % n], B = o.poly[(drag.i + 1) % n], pt = [x, y];
+          const cands = [[0, A[0]], [0, B[0]], [1, A[1]], [1, B[1]]], near = ax => cands.filter(c => c[0] === ax).reduce((p, c) => (Math.abs(c[1] - pt[ax]) < Math.abs(p[1] - pt[ax]) ? c : p));
+          const bx = near(0), by = near(1), res = [nx, ny];
+          if (Math.abs(bx[1] - x) <= Math.abs(by[1] - y)) { res[0] = bx[1]; if (Math.abs(by[1] - y) * V.s < 15) res[1] = by[1]; }
+          else { res[1] = by[1]; if (Math.abs(bx[1] - x) * V.s < 15) res[0] = bx[1]; }
+          nx = res[0]; ny = res[1];
+        }
         o.poly[drag.i] = [nx, ny]; FP.syncBox(o);
       } else if (drag.mode === 'rot') {
         let a = Math.atan2(x - o.x, -(y - o.y)) * 180 / Math.PI; if (!e.altKey) a = Math.round(a / 5) * 5; o.rotation = ((a % 360) + 360) % 360;
@@ -732,5 +744,37 @@
   V.cancel = () => { tmp = null; hover = null; V.draw(); };
   V.resize = resize;
   V.finishPoly = finishPoly;
+
+  // НОВОЕ: убрать вершины, лежащие на одной прямой (лишние «квадратики» после «+»). Двери/окна остаются на своих местах плана. Возвращает число убранных вершин
+  FP.polyClean = function (r) {
+    if (!r.poly) return 0;
+    const f = FP.floor(); let cnt = 0;
+    for (let guard = 0; guard < 200 && r.poly.length > 3; guard++) {
+      const P = r.poly, n = P.length; let idx = -1;
+      for (let i = 0; i < n; i++) {
+        const A = P[(i + n - 1) % n], B = P[i], C = P[(i + 1) % n], ax = B[0] - A[0], ay = B[1] - A[1], bx = C[0] - B[0], by = C[1] - B[1], la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+        if (la < 1e-6 || lb < 1e-6 || (Math.abs(ax * by - ay * bx) / (la * lb) < .002 && ax * bx + ay * by > 0)) { idx = i; break; }
+      }
+      if (idx < 0) break;
+      const walls = FP.getWalls(f), sa = r.id + ':p' + ((idx + n - 1) % n), sb = r.id + ':p' + idx, keep = [];
+      f.openings.forEach(op => {                          // запомнить, где на плане стоят проёмы двух сливающихся сторон
+        if (op.wallId !== sa && op.wallId !== sb) return;
+        const w = walls.find(q => q.id === op.wallId); if (!w) return;
+        const p = FP.openPos(w, op); keep.push({ op, cx: p.cx, cy: p.cy });
+      });
+      FP.polyRemove(r, idx);                              // две стороны сливаются в одну (проёмы второй стороны эта функция удаляет — вернём ниже)
+      const ns = idx > 0 ? idx - 1 : r.poly.length - 1;
+      keep.forEach(k => { if (!f.openings.includes(k.op)) f.openings.push(k.op); k.op.wallId = r.id + ':p' + ns; delete k.op.k; });
+      const w2 = FP.getWalls(f);
+      keep.forEach(k => {
+        const w = w2.find(q => q.id === k.op.wallId); if (!w) return;
+        const L = FP.wlen(w) || 1, ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L;
+        k.op.offset = Math.max(0, Math.min(Math.max(0, L - k.op.width), (k.cx - w.x1) * ux + (k.cy - w.y1) * uy - k.op.width / 2)); delete k.op.k;
+      });
+      cnt++;
+    }
+    return cnt;
+  };
+
   FP.listeners.push(() => V.draw());
 })();
