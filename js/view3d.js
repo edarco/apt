@@ -262,7 +262,7 @@
       const D = p.dr && M.doors && M.doors[p.dr];
       if (D) {                                               // деталь дверцы: вращается вокруг петли
         let pv = pivots[p.dr];
-        if (!pv) { pv = pivots[p.dr] = new THREE.Group(); pv.position.set(D.x, 0, D.z); g.add(pv); fdoors.push({ g: pv, m, id: p.dr, s: D.s }); }
+        if (!pv) { pv = pivots[p.dr] = new THREE.Group(); pv.position.set(D.x, 0, D.z); g.add(pv); fdoors.push({ g: pv, m, id: p.dr, s: D.s, sc: D.sc }); }
         mesh.position.x -= D.x; mesh.position.z -= D.z; pv.add(mesh);
       } else g.add(mesh);
     });
@@ -695,7 +695,7 @@
     fdoors.forEach(d => {                                    // дверцы мебели
       const k = d.m.id + d.id, t = d.m.open ? FD_A : 0; let a = fAng.has(k) ? fAng.get(k) : t;
       if (Math.abs(a - t) > 1e-3) a += (t - a) * Math.min(1, dt * 6); else a = t;
-      fAng.set(k, a); d.g.rotation.y = d.s * a;
+      fAng.set(k, a); if (d.sc) d.g.scale.x = 1 - .88 * a / FD_A; else d.g.rotation.y = d.s * a;   // sc: штора собирается к петле вместо поворота
     });
   }
 

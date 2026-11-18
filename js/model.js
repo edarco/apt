@@ -258,8 +258,14 @@
     f.openings.push(o); FP.select('opening', o.id); FP.changed(); return o;
   };
   FP.addFurniture = function (it) {
+
     FP.snap(); const f = FP.floor(), so = FP.selObj(); let x, y;
-    if (so && FP.sel.type === 'room') { x = so.x + so.width / 2; y = so.y + so.depth / 2; } else { const c = FP.v2.center(); x = c.x; y = c.y; }
+    let room = null;                                                                  // НОВОЕ: комната, куда ставим
+    if (so && FP.sel.type === 'room') room = so;
+    else if (so && FP.sel.type === 'furniture') room = f.rooms.find(r => FP.pointInRoom(r, so.x, so.y)) || null;   // выбрана мебель: берём её комнату
+    if (room) { const q = FP.roomCenter(room); x = q[0]; y = q[1]; }
+    else { const c = FP.v2.center(); x = c.x; y = c.y; }
+
     const k = FP.settings().snap, sn = v => +(Math.round(v / k) * k).toFixed(3);
     const m = { id: FP.uid(), kind: it[0], name: it[1], width: it[2], depth: it[3], height: it[4], color: it[5], x: sn(x), y: sn(y), rotation: 0 };
     if (it[6] != null) m.elev = it[6];      // высота над полом из каталога (розетки, шкафы и т.д.)

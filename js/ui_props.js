@@ -76,7 +76,7 @@
 
     root.appendChild(row('Мебель с комнатой', chkIn(s.moveFurn, v => { s.moveFurn = v; })));
     root.appendChild(row('Подсвечивать наложения', chkIn(s.showConf !== false, v => { s.showConf = v; })));
-    root.appendChild(row('Не ставить друг на друга', chkIn(s.noOverlap !== false, v => { s.noOverlap = v; })));
+    root.appendChild(row('Не ставить друг на друга', chkIn(s.noOverlap === true, v => { s.noOverlap = v; })));
 
     const b = el('div', 'btns'); b.appendChild(btn('+ Комната', () => FP.addRoom())); b.appendChild(btn('+ Стена', () => FP.addWall())); root.appendChild(b);
 
@@ -344,6 +344,18 @@
     root.appendChild(row('Отделка', selIn([['auto', 'Авто (по типу)'], ['matte', 'Матовая краска'], ['gloss', 'Глянец / лак'], ['wood', 'Дерево'], ['fabric', 'Ткань'], ['leather', 'Кожа'], ['plastic', 'Пластик'], ['chrome', 'Металл (блеск)']], m.finish || 'auto', v => { m.finish = v; })));
     colorBlock(root, 'Цвет', m, 'color', FP.FPAL);
     if (MM && MM.parts.some(p => p.c === 'dw')) { if (!m.color2) m.color2 = '#6f5a44'; colorBlock(root, 'Каркас / ножки', m, 'color2', FP.FPAL); }
+
+    {                                                          // НОВОЕ: переключатель предметов на одном месте
+      const inFoot = (a, x, y) => FP.footRects(a).some(q => { const dx = x - q.cx, dy = y - q.cy; return Math.abs(dx * q.ux + dy * q.uy) <= q.hl && Math.abs(-dx * q.uy + dy * q.ux) <= q.ht; });
+      const st = FP.floor().furniture.filter(q => q !== m && (inFoot(m, q.x, q.y) || inFoot(q, m.x, m.y)));
+      if (st.length) {
+        root.appendChild(el('h4', '', 'Предметы на этом месте (выбрать)'));
+        const ls = el('div', 'list');
+        [m].concat(st).forEach(q => ls.appendChild(btn((q === m ? '● ' : '') + q.name + ' · ' + (+(q.elev || 0).toFixed(2)) + ' м', () => FP.select('furniture', q.id))));
+        root.appendChild(ls);
+      }
+    }
+
     delRow(root, true);
   }
 

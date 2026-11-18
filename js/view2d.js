@@ -77,6 +77,16 @@
     return best;
   }
 
+  // НОВОЕ: все предметы мебели под точкой (сверху вниз)
+  function hitFurnAll(x, y) {
+    const f = FP.floor(), out = [];
+    for (let i = f.furniture.length - 1; i >= 0; i--) {
+      const m = f.furniture[i];
+      if (FP.footRects(m).some(q => { const dx = x - q.cx, dy = y - q.cy; return Math.abs(dx * q.ux + dy * q.uy) <= Math.max(q.hl, 8 / V.s) && Math.abs(-dx * q.uy + dy * q.ux) <= Math.max(q.ht, 8 / V.s); })) out.push(m.id);
+    }
+    return out;
+  }
+
   // ---------- ручки стен выбранной комнаты (прямоугольной и многоугольной) ----------
   // данные одной стороны i: начало оси стены на экране, направление, длина, проёмы (в метрах вдоль стороны)
   function edgeInfo(o, i) {
@@ -610,7 +620,9 @@
       drag = Object.assign({ mode: hh.kind, o: JSON.parse(JSON.stringify(o)), moved: false }, hh); return;
     }
 
-    const h = hitTest(x, y);
+    // СТАЛО:
+    let h = hitTest(x, y);
+    if (FP.sel && FP.sel.type === 'furniture' && hitFurnAll(x, y).includes(FP.sel.id)) h = { type: 'furniture', id: FP.sel.id };   // НОВОЕ: клик по месту, где уже выбран предмет, не «перескакивает» на верхний
     if (!h) {                                   // клик по пустому месту: сбросить выбор и тащить холст
       FP.select(null);
       drag = { mode: 'pan', px: p.x, py: p.y, ox: V.ox, oy: V.oy };
@@ -618,11 +630,13 @@
       V.draw();
       return;
     }
+
+    const wasSel = !!(FP.sel && FP.sel.type === h.type && FP.sel.id === h.id);   // НОВОЕ: этот предмет уже был выбран до клика
     FP.select(h.type, h.id);
 
     const o = FP.selObj();
     if (o) {
-      drag = { mode: 'move', type: FP.sel.type, sx: x, sy: y, o: JSON.parse(JSON.stringify(o)), moved: false };
+      drag = { mode: 'move', type: FP.sel.type, sx: x, sy: y, o: JSON.parse(JSON.stringify(o)), moved: false, wasSel };   // НОВОЕ: wasSel в конце
       if (FP.sel.type === 'room') drag.furn = FP.furnInRoom(f, o).map(m => ({ id: m.id, x: m.x, y: m.y }));
     }
     V.draw();
@@ -710,9 +724,15 @@
         f.rooms.push(r); FP.select('room', r.id); FP.changed();
       }
       tmp = null;
+    // СТАЛО (вставлены 5 строк между ними):
     } else if (drag.mode === 'pan') cv.style.cursor = (V.tool === 'pan' || V.lock) ? 'grab' : 'default';
+    else if (!drag.moved && drag.mode === 'move' && drag.type === 'furniture' && drag.wasSel) {   // НОВОЕ: клик без перетаскивания по уже выбранному
+      const pp = P(e), all = hitFurnAll(wx(pp.x), wy(pp.y)), k = all.indexOf(FP.sel.id);
+      if (all.length > 1 && k >= 0) FP.select('furniture', all[(k + 1) % all.length]);          // выбрать следующий под ним (по кругу)
+    }
     else if (drag.moved) {
-      if (drag.mode === 'move' && drag.type === 'furniture' && set().noOverlap !== false) {   // запрет наложения: вернуть на прежнее место
+      // СТАЛО (только условие: откат включается лишь если сами включите галочку):
+      if (drag.mode === 'move' && drag.type === 'furniture' && set().noOverlap === true) {   // запрет наложения: вернуть на прежнее место
         const o = FP.selObj(), bad = o ? FP.conflicts(FP.floor()).get(o.id) : null;
         if (bad && bad.length) {
           o.x = drag.o.x; o.y = drag.o.y; o.rotation = drag.o.rotation;
