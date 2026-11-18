@@ -32,9 +32,9 @@
   FP.RTYPES = TYPES;                                // нужен панели свойств комнаты
   const OPTS = {
     kitchen: [['dining', 'Обеденный стол со стульями', true], ['hob', 'Встроенная газовая панель + духовка', true], ['dish', 'Посудомоечная машина', true], ['washer', 'Стиральная машина в шкафу', true], ['tall', 'Высокий шкаф-пенал до потолка', true]],
-    bedroom: [['tv', 'Телевизор на стене напротив кровати', true], ['vanity', 'Туалетный (дамский) столик со стулом', true], ['chair', 'Стул у стены', true], ['dresser', 'Комод', true], ['ward2', 'Второй шкаф', true], ['mirror', 'Зеркало в рост', true], ['armchair', 'Кресло', false], ['desk', 'Рабочее место', false], ['rug', 'Ковёр', false]],
-    kids: [['pc', 'Стол с компьютером (иначе обычный стол)', true], ['pen', 'Шкаф-пенал для тетрадей и учебников', true], ['shelf', 'Стеллаж для книг и игрушек', false], ['rug', 'Ковёр', false], ['mirror', 'Зеркало в рост', false]],
-    living: [['tv', 'ТВ-тумба и телевизор', true], ['lsofa', 'Угловой диван', true], ['dining', 'Обеденный стол со стульями', false], ['oval', 'Овальный стол со стульями', true], ['armchair', 'Два кресла', true], ['shelf', 'Стеллаж', true], ['board', 'Сервант / комод с полкой', false], ['plant', 'Растение', false], ['rug', 'Ковёр', false]],
+    bedroom: [['ward', 'Шкаф (основной)', true], ['tv', 'Телевизор на стене напротив кровати', true], ['vanity', 'Туалетный (дамский) столик со стулом', true], ['chair', 'Стул у стены', true], ['dresser', 'Комод', true], ['ward2', 'Второй шкаф', true], ['mirror', 'Зеркало в рост', true], ['armchair', 'Кресло', false], ['desk', 'Рабочее место', false], ['rug', 'Ковёр', false]],
+    kids: [['ward', 'Гардероб', true], ['pc', 'Стол с компьютером (иначе обычный стол)', true], ['pen', 'Шкаф-пенал для тетрадей и учебников', true], ['shelf', 'Стеллаж для книг и игрушек', false], ['rug', 'Ковёр', false], ['mirror', 'Зеркало в рост', false]],
+    living: [['tv', 'ТВ-тумба и телевизор', true], ['tvwall', 'ТВ-тумба подвесная (к стене, без ножек)', false], ['shelfd', 'Стеллаж с посудой вместо книг', false], ['lsofa', 'Угловой диван', true], ['dining', 'Обеденный стол со стульями', false], ['oval', 'Овальный стол со стульями', true], ['armchair', 'Два кресла', true], ['shelf', 'Стеллаж', true], ['board', 'Сервант / комод с полкой', false], ['plant', 'Растение', false], ['rug', 'Ковёр', false]],
     bath: [['shower', 'Душ вместо ванны', true], ['inst', 'Подвесной унитаз (инсталляция) + шкаф над ним до потолка', true], ['laundry', 'Шкафчик с полками для грязной одежды', true], ['washer', 'Стиральная машина', false]],
     office: [['wardrobe', 'Шкаф', true]],
     hall: [['mirror', 'Зеркало в рост', true]],
@@ -44,6 +44,7 @@
     light: { name: 'Светлый (скандинавский)', floor: 'lam_oak_light', wet: 'tile_sq60_lgrey', wall: '#f2efe9', s: '#d9d4c7', w: '#d8c3a0', k: '#ece8de' },
     warm: { name: 'Тёплый (дерево)', floor: 'lam_oak_nat', wet: 'tile_sq60_beige', wall: '#e6dcc7', s: '#bf8c6c', w: '#a8794f', k: '#c9b08a' },
     dark: { name: 'Тёмный современный', floor: 'lam_oak_dark', wet: 'tile_sq60_graph', wall: '#a7a8a8', s: '#5c5f64', w: '#6b4429', k: '#3a3d42' },
+    girl: { name: 'Для девочки (яркий розовый)', floor: 'lam_oak_light', wet: 'tile_sq60_lgrey', wall: '#f7b2cc', s: '#ff8fb8', w: '#fbd5e3', k: '#f9c6da' },
     keep: { name: 'Не менять цвета' }
   };
   const guess = n => { n = (n || '').toLowerCase(); return /косметол/.test(n) ? 'cosmo' : /кухн/.test(n) ? 'kitchen' : /детск/.test(n) ? 'kids' : /спальн/.test(n) ? 'bedroom' : /ванн|туалет|санузел|wc/.test(n) ? 'bath' : /кабинет|рабоч/.test(n) ? 'office' : /коридор|прихож|холл/.test(n) ? 'hall' : 'living'; };
@@ -79,7 +80,8 @@
   const pairOK = (a, b) => {                        // разрешённые наложения: стул у стола, варочная на духовке
     const sa = K.soft.has(a.kind), sb = K.soft.has(b.kind);
     if ((sa && (sb || K.table.has(b.kind))) || (sb && K.table.has(a.kind))) return true;
-    return [a.kind, b.kind].sort().join() === 'base_oven,hob_gas';
+    const pk = [a.kind, b.kind].sort().join();
+    return pk === 'base_oven,hob_gas' || pk === 'hood,wall_cab' || pk === 'inst_box,toilet_wall';   // панель на духовке; вытяжка внутри шкафа; унитаз у короба
   };
 
   // ---------- НОВОЕ: многоугольник → прямоугольные части ----------
@@ -175,7 +177,7 @@
 
   // ---------- создание и проверка предметов ----------
   function mk(ctx, it, x, y, rot, w) {
-    const m = { id: FP.uid(), kind: it.kind, name: it.name, width: w || it.w, depth: it.d, height: it.h, color: ctx.col(it), x: +x.toFixed(3), y: +y.toFixed(3), rotation: rot };
+    const m = { id: FP.uid(), kind: it.kind, name: it.name, width: w || it.w, depth: it.d, height: it.kind === 'wardrobe' ? ctx.f.height : it.h, color: ctx.col(it), x: +x.toFixed(3), y: +y.toFixed(3), rotation: rot };   // шкафы-гардеробы — до потолка
     if (it.elev != null) m.elev = it.elev;
     if (it.flip) m.flipX = true;
     return m;
@@ -210,9 +212,11 @@
   }
   function blockedStrip(ctx, m, z) {                // '' или причина: мешает месту перед предметом / сам закрывает место перед чужим
     const mine = strips(m), ma = fr(m), rad = Math.hypot(m.width, m.depth) / 2 + 1.7;
+
     for (const o of ctx.all) {
-      if (o === m || skipK(o)) continue;
+      if (o === m || skipK(o) || (o.kind === 'toilet_wall' && m.kind === 'inst_box')) continue;
       const zo = zr(ctx, o); if (zo[0] >= 1.3 || zo[1] <= .25) continue;       // навесное и совсем низкое не мешает
+
       if (Math.hypot(o.x - m.x, o.y - m.y) > rad + Math.hypot(o.width, o.depth) / 2) continue;
       if (mine.length && !perpEx(m, o) && fr(o).some(q => mine.some(s => hit(s, q, .005)))) return 'нет места перед ним: мешает «' + o.name + '»';
       if (z[0] < 1.3 && z[1] > .25 && !perpEx(o, m)) { const so = strips(o); if (so.length && so.some(s => ma.some(p => hit(s, p, .005)))) return 'закрывает место перед «' + o.name + '»'; }
@@ -232,7 +236,9 @@
         else if (z[0] < 2.05) return q.o.kind === 'door' ? 'мешает дверь' : 'мешает проём';
       }
     }
-    if (!lax && ctx.WR.some(q => a.some(p => hit(p, q, .01)))) return 'заходит в стену';
+
+    if (!lax && ctx.WR.some(q => a.some(p => hit(p, q, .02)))) return 'заходит в стену';
+
     const rad = Math.hypot(m.width, m.depth) / 2;
     for (const o of ctx.all) {
       if (o === m || skipK(o)) continue;
@@ -307,7 +313,7 @@
   function tvPair(ctx, side, target) {
     const TV = I('tv', 'Телевизор', 1.23, .06, .72, '#1a1a1a', 'x', 1.0), [lo, hi] = span(ctx, side);
     for (const w of [1.6, 1.2]) {
-      const U = I('tvstand', 'ТВ-тумба', w, .4, .5, '#b99570', 'w');
+      const U = ctx.o.on.tvwall ? I('tvstand_wall', 'ТВ-тумба подвесная', w, .4, .38, '#b99570', 'w', .3) : I('tvstand', 'ТВ-тумба', w, .4, .5, '#b99570', 'w');
       for (const a of cands(lo, hi, w, 'mid').sort((p, q) => Math.abs(p - target) - Math.abs(q - target))) {
         const mark = ctx.added.length, un = make(ctx, U, side, a, w);
         if (why(ctx, un, side)) continue;
@@ -352,13 +358,19 @@
       pts.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
       return pts.find(p => !why(ctx, pr(W, D, p[0], p[1]), null)) || null;
     }
-    const x0 = r.x + iw / 2, x1 = r.x + r.width - iw / 2, y0 = r.y + id / 2, y1 = r.y + r.depth - id / 2;
-    if (x1 < x0 - 1e-6 || y1 < y0 - 1e-6) return null;
-    for (let x = x0; x <= x1 + 1e-6; x += .15) { pts.push([x, y0]); pts.push([x, y1]); }
-    for (let y = y0; y <= y1 + 1e-6; y += .15) { pts.push([x0, y]); pts.push([x1, y]); }
-    const cr = p => Math.min(...[[r.x, r.y], [r.x + r.width, r.y], [r.x, r.y + r.depth], [r.x + r.width, r.y + r.depth]].map(c => Math.hypot(p[0] - c[0], p[1] - c[1])));
-    pts.sort((a, b) => near ? Math.hypot(a[0] - near[0], a[1] - near[1]) - Math.hypot(b[0] - near[0], b[1] - near[1]) : cr(a) - cr(b));   // сначала ближайшие к нужному углу
-    return pts.find(p => !why(ctx, pr(iw, id, p[0], p[1]), null) && !why(ctx, pr(ow + 2 * mg, od + 2 * mg, p[0], p[1]), null, true)) || null;
+
+    const cr = p => Math.min(...[[r.x, r.y], [r.x + r.width, r.y], [r.x, r.y + r.depth], [r.x + r.width, r.y + r.depth]].map(c => Math.hypot(p[0] - c[0], p[1] - c[1])));   // расстояние до ближайшего угла
+    for (const gp of [.2, 0]) {                                                  // сначала с зазором 20 см до стен (чтобы стулья у стены помещались), потом вплотную
+      const x0 = r.x + iw / 2 + gp, x1 = r.x + r.width - iw / 2 - gp, y0 = r.y + id / 2 + gp, y1 = r.y + r.depth - id / 2 - gp, cand = [];
+      if (x1 < x0 - 1e-6 || y1 < y0 - 1e-6) continue;
+      for (let x = x0; x <= x1 + 1e-6; x += .15) { cand.push([x, y0]); cand.push([x, y1]); }
+      for (let y = y0; y <= y1 + 1e-6; y += .15) { cand.push([x0, y]); cand.push([x1, y]); }
+      cand.sort((a, b) => near ? Math.hypot(a[0] - near[0], a[1] - near[1]) - Math.hypot(b[0] - near[0], b[1] - near[1]) : cr(a) - cr(b));   // сначала ближайшие к нужному углу
+      const p = cand.find(p => !why(ctx, pr(iw, id, p[0], p[1]), null) && !why(ctx, pr(ow + 2 * mg, od + 2 * mg, p[0], p[1]), null, true));
+      if (p) return p;
+    }
+    return null;
+
   }
   // дотянуть линию кухонных модулей до края стены (нет пустых мест по краям)
   function closeGap(ctx, side, dir, CT, CAB) {
@@ -427,7 +439,7 @@
       const off = (i - (n - 1) / 2) * (tw / n);
       tryAdd(ctx, vert ? mk(ctx, C, p[0] + s * e, p[1] + off, s < 0 ? 270 : 90) : mk(ctx, C, p[0] + off, p[1] + s * e, s < 0 ? 0 : 180));
     });
-    const ef = tw / 2 + .15;                                                    // НОВОЕ: стулья на торцах стола (если не упираются в стену)
+    const ef = tw / 2 - .1;                                                     // стулья на торцах задвинуты под стол на 10 см (как в вашей расстановке)
     [-1, 1].forEach(s => tryAdd(ctx, vert ? mk(ctx, C, p[0], p[1] + s * ef, s < 0 ? 0 : 180) : mk(ctx, C, p[0] + s * ef, p[1], s < 0 ? 270 : 90)));
     return true;
   }
@@ -486,14 +498,14 @@
         const f = ctx.f, r = ctx.r, on = ctx.o.on, A = r.width * r.depth, H = f.height, KC = '#899a87', KD = .6;      // KD: единая глубина всей нижней мебели
         const CT = I('counter', 'Кухонный модуль', .6, KD, .9, KC, 'k'),
           CAB = I('wall_cab', 'Навесной шкаф (до потолка)', .6, .35, Math.max(.5, H - 1.4), KC, 'k', 1.4),
-          CABT = I('wall_cab', 'Шкаф над вытяжкой (до потолка)', .6, .35, Math.max(.3, H - 2.3), KC, 'k', 2.3),
+          CABT = I('wall_cab', 'Шкаф над вытяжкой (до потолка)', .6, .35, Math.max(.3, H - 1.62), KC, 'k', 1.62),   // от верха вытяжки до потолка: труба внутри шкафа
           HOOD = I('hood', 'Вытяжка', .6, .5, .8, '#cfcfcf', 'x', 1.5),
           HOB = I('hob_gas', 'Газовая варочная панель', .6, .52, .065, '#222222', 'x', .877),
           FR = I('fridge', 'Холодильник', .6, KD, 1.8, '#e2e2dc', 'x'),
           SK = I('sink', 'Мойка', .8, KD, .91, KC, 'k'),
           ST = on.hob ? I('base_oven', 'Нижний модуль со встроенной духовкой', .6, KD, .9, KC, 'k') : I('stove', 'Плита', .6, KD, .9, '#cfcfcf', 'x'),
           WM = on.washer ? I('cab_washer', 'Шкаф со встроенной стиральной машиной', .6, KD, .9, KC, 'k') : null,
-          DW = on.dish ? I('dishwasher', 'Посудомоечная машина', .6, KD, .85, '#e8e8e8', 'x') : null,
+          DW = on.dish ? I('dishwasher', 'Посудомоечная машина', +(ctx.o.dw || .6), KD, .85, '#e8e8e8', 'x') : null,
           TALL = on.tall ? I('tall_cab', 'Шкаф-пенал (до потолка)', .6, KD, H - .05, KC, 'k') : null,
           CORN = I('corner_cab', 'Угловой шкаф', .9, .9, .9, KC, 'k'),
           CORNW = I('corner_wall', 'Угловой навесной шкаф', .9, .9, Math.max(.5, H - 1.4), KC, 'k', 1.4),
@@ -579,7 +591,7 @@
         }
         // плиту и мойку отдельно в другом углу не ставим: не влезли в линию, значит вариант получит «нет: …»
         if (WM && !has('cab_washer')) fitAny(ctx, WM, [.6], byLen(ctx), ['end', 'start', 'mid']);
-        if (DW && !has('dishwasher')) fitAny(ctx, DW, [.6], byLen(ctx), ['end', 'start', 'mid']);
+        if (DW && !has('dishwasher')) fitAny(ctx, DW, [DW.w], byLen(ctx), ['end', 'start', 'mid']);
         if (TALL && !has('tall_cab')) {                                         // пенал рядом с холодильником
           const fm = g('fridge'), s = fm && ROT[fm.rotation]; let t = null;
           if (s) for (const sg of [1, -1]) t = t || put(ctx, TALL, s, al(fm, s) + sg * .6);
@@ -690,9 +702,10 @@
 
         if (on.tv && !(bm && tvNear(ctx, OPP[v.main], al(bm, v.main)))) miss(ctx, 'телевизор', 1);   // только напротив кровати, ближе всего к её центру
 
-        if (!flexAny(ctx, I('wardrobe', 'Шкаф', 1.8, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 2.6)) miss(ctx, 'шкаф', 12);
-
-        else if (on.ward2 && A >= 12 && !flexAny(ctx, I('wardrobe', 'Шкаф 2', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['end', 'start'], .8, 2.0)) miss(ctx, 'второй шкаф', 2);
+        if (on.ward !== false) {
+          if (!flexAny(ctx, I('wardrobe', 'Шкаф', 1.8, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 2.6)) miss(ctx, 'шкаф', 12);
+          else if (on.ward2 && A >= 12 && !flexAny(ctx, I('wardrobe', 'Шкаф 2', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['end', 'start'], .8, 2.0)) miss(ctx, 'второй шкаф', 2);
+        }
 
         if (on.vanity) { let vt = null; for (const s of sides) for (const p of ['start', 'end', 'mid']) vt = vt || vanitySet(ctx, s, p); if (!vt) miss(ctx, 'туалетный столик', 2); }   // НОВОЕ
         if (on.chair && !fitAny(ctx, I('chair', 'Стул', .45, .5, .85, '#b18c68', 'w'), [.45], sides, ['end', 'start', 'mid'])) miss(ctx, 'стул', 1);                    // НОВОЕ
@@ -710,13 +723,15 @@
 
         const out = [], kinds = ctx.o.on.lsofa ? ['L'] : ['straight'], KN = { straight: 'прямой диван', L: 'угловой диван (лежанка к краю)' };
 
-        kinds.forEach(k => mains(ctx).forEach(m => (k === 'L' ? ['start', 'end'] : ['mid', 'start', 'end']).forEach(p => out.push({ main: m, pos: p, sk: k, label: KN[k] + ' у стены «' + SN[m] + '» (' + PN[p] + '), ТВ напротив' }))));
+        kinds.forEach(k => mains(ctx).forEach(m => ['mid', 'start', 'end'].forEach(p => ['corner', 'center'].forEach(tb => out.push({ main: m, pos: p, sk: k, tb, label: KN[k] + ' у стены «' + SN[m] + '» (' + PN[p] + '), ТВ напротив, стол ' + (tb === 'corner' ? 'в углу' : 'в центре') })))));
+
         return out;
       },
       run(ctx, v) {
         const r = ctx.r, on = ctx.o.on, A = r.width * r.depth, sw = A >= 14 ? 2.3 : 1.6, L = byLen(ctx);
         const isL = v.sk === 'L', flip = isL && ((v.pos === 'end') !== (v.main === 'n' || v.main === 'e'));   // лежанка смотрит в сторону края
-        const sofa = isL ? Object.assign(I('sofa_l', 'Диван угловой', 2.8, 1.9, .78, '#c4c2b2', 's'), { flip }) : I('sofa', 'Диван', 1.6, .95, .78, '#c4c2b2', 's');
+
+        const sofa = isL ? Object.assign(I('sofa_l', 'Диван угловой', 2.85, 1.5, .78, '#c4c2b2', 's'), { flip }) : I('sofa', 'Диван', 1.6, .95, .78, '#c4c2b2', 's');
 
         const sm = perp(ctx, v.main) >= (isL ? 3.0 : 2.6) ? (isL ? put(ctx, sofa, v.main, v.pos) : putFlex(ctx, sofa, v.main, v.pos, 1.6, A >= 14 ? 2.6 : 2.1)) : null;
         if (!sm) miss(ctx, 'диван', 30);
@@ -746,11 +761,11 @@
           const across = (v.main === 'n' || v.main === 'w') ? (hz ? rr.y + rr.depth : rr.x + rr.width) : (hz ? rr.y : rr.x);
           near = hz ? [far, across] : [across, far];
         }
-        if (on.dining && !placeTable(ctx, A >= 16 ? [[1.7, .9], [1.4, .8], [1.2, .8]] : [[1.2, .8], [.9, .65]], false, 'обеденный стол', near, true)) miss(ctx, 'обеденный стол', 6);
-        if (on.oval && !placeTable(ctx, A >= 16 ? [[1.8, 1], [1.4, .9]] : [[1.4, .9]], true, 'овальный стол', near, true)) miss(ctx, 'овальный стол', 6);
+        if (on.dining && !placeTable(ctx, [[1.4, .9]], false, 'обеденный стол', near, v.tb === 'corner')) miss(ctx, 'обеденный стол', 6);
+        if (on.oval && !placeTable(ctx, [[1.4, .9]], true, 'овальный стол', near, v.tb === 'corner')) miss(ctx, 'овальный стол', 6);
 
         if (on.armchair) for (let i = 0; i < 2; i++) if (!fitAny(ctx, I('armchair', 'Кресло', .85, .85, .8, '#bf8c6c', 's'), [.85], L, ['start', 'end'])) { if (!i) miss(ctx, 'кресло', 3); break; }   // два кресла
-        if (on.shelf && !flexAny(ctx, I('shelf', 'Стеллаж', 1, .35, 1.9, '#b99570', 'w'), L, ['start', 'end', 'mid'], .8, 1.6)) miss(ctx, 'стеллаж', 3);
+        if (on.shelf && !flexAny(ctx, I(on.shelfd ? 'shelf_dishes' : 'shelf', on.shelfd ? 'Стеллаж с посудой' : 'Стеллаж', 1, .35, 1.9, '#b99570', 'w'), L, ['start', 'end', 'mid'], .8, 1.6)) miss(ctx, 'стеллаж', 3);
         if (on.board) {                                                         // сервант с полкой над ним
           const sb = flexAny(ctx, I('dresser', 'Сервант / комод', 1.2, .5, .85, '#c9b08a', 'w'), L, ['mid', 'start', 'end'], 1.0, 1.8);
           if (!sb) miss(ctx, 'сервант', 3); else { const s0 = ROT[sb.rotation]; if (s0) put(ctx, I('wall_shelf', 'Полка настенная', 1, .22, .04, '#b99570', 'w', 1.5), s0, al(sb, s0), { w: Math.min(sb.width, 1.2) }); }
@@ -785,9 +800,9 @@
         const TO = on.inst ? I('toilet_wall', 'Унитаз подвесной (инсталляция)', .36, .55, 1.1, WH, 'x') : I('toilet', 'Унитаз', .42, .7, .45, WH, 'x');
         const to = fitAny(ctx, TO, [TO.w], sides, [v.tp, 'mid', 'start', 'end']);
         if (!to) miss(ctx, 'унитаз', 25);
-        else if (on.inst) {                                                     // шкаф над инсталляцией: от 1,2 м до потолка
-          const s0 = ROT[to.rotation], cabI = w => I('wall_cab', 'Шкаф над инсталляцией (до потолка)', w, .35, Math.max(.3, H - 1.2), KC, 'k', 1.2);
-          if (s0) [.6, .4].some(w => put(ctx, cabI(w), s0, al(to, s0), { w }));
+        else if (on.inst) {                                                     // короб инсталляции из ГКЛ: от пола до потолка, бачок внутри
+          const s0 = ROT[to.rotation], boxI = w => I('inst_box', 'Короб инсталляции (ГКЛ до потолка)', w, .25, H, WH, 'wall');
+          if (s0 && [.6, .5].some(w => put(ctx, boxI(w), s0, al(to, s0), { w }))) { ctx.added.splice(ctx.added.indexOf(to), 1); ctx.added.push(to); }   // унитаз после короба: на плане рисуется поверх
         }
         const VN = I('vanity', 'Тумба с умывальником', .8, .5, .85, WH, 'x');
         let vn = fitAny(ctx, VN, wc ? [.6] : [.8, .6, .5], sides, [OPF[v.tp], 'mid', 'start', 'end']);
@@ -853,7 +868,7 @@
           const vn = flexAny(ctx, I('vanity', 'Умывальник с тумбой', .8, .5, .85, WH, 'x'), L, ['start', 'end', 'mid'], .6, 1.2);
           if (!vn) miss(ctx, 'умывальник', 4); else if (on.mirror) { const s = ROT[vn.rotation]; if (s) put(ctx, I('mirror', 'Зеркало', .6, .03, .8, '#8b6b4a', 'x', 1.1), s, al(vn, s)); }
         }
-        if (on.shelf && !flexAny(ctx, I('shelf', 'Стеллаж', 1, .35, 1.9, '#b99570', 'w'), L, ['start', 'end', 'mid'], .8, 1.6)) miss(ctx, 'стеллаж', 3);
+        if (on.shelf && !flexAny(ctx, I('shelf_cosmo', 'Стеллаж косметолога', 1, .35, 1.9, '#b99570', 'w'), L, ['start', 'end', 'mid'], .8, 1.6)) miss(ctx, 'стеллаж', 3);
         if (on.cab) fitAny(ctx, I('wall_cab', 'Шкафчик навесной', .6, .35, .7, '#e8e4da', 'x', 1.4), [.6], L, ['mid', 'start', 'end']);
         if (on.lamp) fitAny(ctx, I('lamp_floor', 'Торшер', .35, .35, 1.6, '#f7efdc', 'x'), [.35], L, ['end', 'start']);
       }
@@ -884,7 +899,8 @@
         if (dk) { const sd = ROT[dk.rotation]; if (sd) for (const g of [1, -1]) pn = pn || put(ctx, PEN, sd, al(dk, sd) + g * (dk.width / 2 + .3)); }
         if (!pn && !fitAny(ctx, PEN, [.6], sides, ['start', 'end'])) miss(ctx, 'шкаф-пенал', 4);
       }
-      if (!flexAny(ctx, I('wardrobe', 'Гардероб', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 1.8)) miss(ctx, 'гардероб', 12);
+      if (on.ward !== false && !flexAny(ctx, I('wardrobe', 'Гардероб', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 1.8)) miss(ctx, 'гардероб', 12);
+
       if (on.shelf && !flexAny(ctx, I('shelf', 'Стеллаж', 1, .35, 1.9, '#b99570', 'w'), sides, ['start', 'end', 'mid'], .8, 1.4)) miss(ctx, 'стеллаж', 2);
       if (on.mirror && !fitAny(ctx, I('mirror_full', 'Зеркало в рост', .5, .04, 1.7, '#6f5a44', 'x', .1), [.5], sides, ['end', 'start', 'mid'])) miss(ctx, 'зеркало', 1);
     }
@@ -934,7 +950,7 @@
   const NEEDFB = {                                                                       // ключ = название из miss(ctx, '...')
     'кровать': ctx => {
       const o = ctx.o, A = ctx.r.width * ctx.r.depth, bw = (o.bed && o.bed !== 'auto') ? +o.bed : (o.type === 'kids' ? (A >= 6 ? 1.05 : .95) : (A >= 9 ? 1.65 : A >= 7 ? 1.45 : .95));
-      return [bw, .95].map(w => I('bed', 'Кровать', w, w < 1.35 ? 2.05 : 2.15, .65, '#e5dfd1', 's'));
+      return ((o.bed && o.bed !== 'auto') ? [bw] : [bw, .95]).map(w => I('bed', 'Кровать ' + Math.round(w * 100 - 5), w, w < 1.35 ? 2.05 : 2.15, .65, '#e5dfd1', 's'));   // выбранную ширину не уменьшаем
     },
     'шкаф': () => [1.2, .8].map(w => I('wardrobe', 'Шкаф', w, .6, 2.2, '#d6cdbb', 'k')),
     'второй шкаф': () => [.8].map(w => I('wardrobe', 'Шкаф 2', w, .6, 2.2, '#d6cdbb', 'k')),
@@ -949,17 +965,17 @@
     'телевизор': () => [I('tv', 'Телевизор', 1.23, .06, .72, '#1a1a1a', 'x', 1.0)],
     'диван': () => [1.6, 1.4].map(w => I('sofa', 'Диван', w, .95, .78, '#c4c2b2', 's')),
     'ТВ-тумба': () => [I('tvstand', 'ТВ-тумба', 1.2, .4, .5, '#b99570', 'w')],
-    'стеллаж': () => [1, .8].map(w => I('shelf', 'Стеллаж', w, .35, 1.9, '#b99570', 'w')),
+    'стеллаж': ctx => [1, .8].map(w => ctx.o.type === 'cosmo' ? I('shelf_cosmo', 'Стеллаж косметолога', w, .35, 1.9, '#b99570', 'w') : I(ctx.o.on.shelfd ? 'shelf_dishes' : 'shelf', 'Стеллаж', w, .35, 1.9, '#b99570', 'w')),
     'сервант': () => [I('dresser', 'Сервант / комод', 1.0, .5, .85, '#c9b08a', 'w')],
     'шкаф-пенал': () => [I('tall_cab', 'Шкаф-пенал', .6, .45, 2.1, '#d6cdbb', 'k')],
     'высокий шкаф': () => [I('tall_cab', 'Шкаф-пенал (до потолка)', .6, .6, 2.1, '#899a87', 'k')],
     'обувница': () => [I('shoe_rack', 'Обувница', .8, .3, .5, '#d6cdbb', 'k')],
-    'обеденный стол': () => [I('dining', 'Обеденный стол', .9, .65, .75, '#bd9a73', 'w')],
+    'обеденный стол': ctx => [ctx.o.type === 'kitchen' ? I('dining', 'Обеденный стол', .9, .65, .75, '#bd9a73', 'w') : I('dining', 'Обеденный стол', 1.4, .9, .75, '#bd9a73', 'w')],
     'овальный стол': () => [I('oval', 'Стол овальный', 1.4, .9, .75, '#bd9a73', 'w')],
     'мойка': () => [I('sink', 'Мойка', .8, .6, .91, '#899a87', 'k')],
     'плита': () => [I('stove', 'Плита', .6, .6, .9, '#cfcfcf', 'x')],
     'холодильник': () => [I('fridge', 'Холодильник', .6, .6, 1.8, '#e2e2dc', 'x')],
-    'посудомойка': () => [I('dishwasher', 'Посудомоечная машина', .6, .6, .85, '#e8e8e8', 'x')],
+    'посудомойка': ctx => [I('dishwasher', 'Посудомоечная машина', +(ctx.o.dw || .6), .6, .85, '#e8e8e8', 'x')],
     'стиральная машина': () => [I('washer', 'Стиральная машина', .6, .6, .85, '#f0f0f0', 'x')],
     'ванна / душ': () => [I('shower_curtain', 'Душ: поддон + шторка', .9, .9, 2, '#bfe0ee', 'x')],
     'унитаз': () => [I('toilet', 'Унитаз', .42, .7, .45, WH, 'x')],
@@ -1192,10 +1208,13 @@
     F.style = mkSel(Object.keys(STYLES).map(k => [k, STYLES[k].name]), P.style || 'dark');
     F.lights = mkChk(P.lights !== undefined ? P.lights : true); F.clear = mkChk(P.clear !== undefined ? P.clear : true);
     F.bed = mkSel([['auto', 'Авто (по площади)'], ['1.85', 'Кровать 180'], ['1.65', 'Кровать 160'], ['1.45', 'Кровать 140'], ['1.25', 'Кровать 120'], ['1.05', 'Кровать 100'], ['.95', 'Кровать 90']], P.bed || '1.65');
+    F.dw = mkSel([['.6', '60 см'], ['.45', '45 см (узкая)']], P.dw || '.6');
+
     const fillOpts = () => {
       ob.innerHTML = '';
       if (!(P.bed && P.type === F.type.value)) F.bed.value = F.type.value === 'kids' ? '1.05' : '1.65';   // НОВОЕ: по умолчанию спальня 160, детская 100
       if (F.type.value === 'bedroom' || F.type.value === 'kids') ob.appendChild(row('Тип кровати', F.bed));
+      if (F.type.value === 'kitchen') ob.appendChild(row('Ширина посудомойки', F.dw));
       const saved = (P.type === F.type.value && P.on) ? P.on : null;      // галочки запоминаются, пока тип комнаты тот же
       (OPTS[F.type.value] || []).forEach(a => { const c = mkChk(saved && a[0] in saved ? saved[a[0]] : a[2]); c.dataset.k = a[0]; ob.appendChild(row(a[1], c)); });
     };
@@ -1215,7 +1234,7 @@
       const on = {}; ob.querySelectorAll('input').forEach(i => { on[i.dataset.k] = i.checked; });
 
       close(); r.rtype = F.type.value;                       // запоминаем тип комнаты
-      const opts = { type: F.type.value, anchor: F.anchor.value, style: F.style.value, lights: F.lights.checked, clear: F.clear.checked, bed: F.bed.value, on, extra: ex.slice() };
+      const opts = { type: F.type.value, anchor: F.anchor.value, style: F.style.value, lights: F.lights.checked, clear: F.clear.checked, bed: F.bed.value, dw: F.dw.value, on, extra: ex.slice() };
       r.afPrefs = JSON.parse(JSON.stringify(opts));          // запоминаем все настройки для этой комнаты
 
       if (r.poly) {                                          // НОВОЕ: многоугольник
@@ -1266,7 +1285,7 @@
           (OPTS[type] || []).forEach(q => { on[q[0]] = (P && P.on && q[0] in P.on) ? P.on[q[0]] : q[2]; });
           a.r.rtype = type;
 
-          const oo = { type, anchor: P ? P.anchor : 'auto', style: SS.value, lights: LL.checked, clear: CC.checked, bed: P ? P.bed : 'auto', on, extra: (P && P.extra) ? P.extra : [] };
+          const oo = { type, anchor: P ? P.anchor : 'auto', style: SS.value, lights: LL.checked, clear: CC.checked, bed: P ? P.bed : 'auto', dw: P ? P.dw : '.6', on, extra: (P && P.extra) ? P.extra : [] };
           const st = a.r.poly ? FP.autofillPoly(a.r, oo) : FP.autofill(a.r, oo);
           if (!st || !st.results.length) fail.push(a.r.name);
 

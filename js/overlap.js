@@ -63,6 +63,7 @@
     const pairOK = (a, b) => {
       const sa = K.soft.has(a.k), sb = K.soft.has(b.k);
       if ((sa && (sb || K.table.has(b.k))) || (sb && K.table.has(a.k))) return true;                        // стул/кресло у стола
+      if ((a.k === 'inst_box' && b.k === 'toilet_wall') || (a.k === 'toilet_wall' && b.k === 'inst_box')) return true;   // унитаз у короба инсталляции
       const emb = (x, y) => K.built.has(x.k) && K.host.has(y.k) && y.rects.some(q => inR(q, x.m.x, x.m.y, 0)); // встроено в шкаф
       return emb(a, b) || emb(b, a);
     };
@@ -77,7 +78,8 @@
     }
     // 2) мебель со стенами
     const WR = FP.wallRects(f, walls);
-    I.forEach(a => { if (WR.some(q => a.rects.some(p => rrHit(p, q, .01)))) add(a.m.id, 'wall', 'заходит в стену'); });
+    I.forEach(a => { if (WR.some(q => a.rects.some(p => rrHit(p, q, .02)))) add(a.m.id, 'wall', 'заходит в стену'); });
+
     // 3) двери: зона открывания (четверть круга) и проход с другой стороны
     f.openings.forEach(o => {
       if (o.kind !== 'door') return;

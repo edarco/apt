@@ -196,6 +196,26 @@
     else if (!r.merge) root.appendChild(el('p', 'hint', 'Нет смежных комнат. Они должны стоять вплотную: стена к стене.'));
   }
 
+  // ---------- лог комнаты: текст для копирования ----------
+  function roomLog(r) {
+    const f = FP.floor(), walls = FP.getWalls(f), L = [], n2 = v => +(+v).toFixed(3);
+    L.push('Комната «' + r.name + '»: ' + n2(r.width) + '×' + n2(r.depth) + ' м (площадь ' + FP.roomArea(r).toFixed(2) + ' м²), потолок ' + f.height + ' м, тип ' + (r.rtype || '—') + ', x=' + n2(r.x) + ', y=' + n2(r.y) + ', пол ' + FP.floorSpec(r).m);
+    if (r.poly) L.push('  многоугольник: ' + JSON.stringify(r.poly));
+    walls.filter(w => w.room === r).forEach(w => {
+      const ops = FP.spans(f, walls, w).filter(a => !a.o.merged).sort((a, b) => a.s - b.s)
+        .map(a => a.o.kind + ' ' + a.s.toFixed(2) + '–' + a.e.toFixed(2) + (a.o.kind === 'window' ? ' (подоконник ' + (a.o.sill != null ? a.o.sill : .9) + ', высота ' + (a.o.h != null ? a.o.h : 1.3) + ')' : ''));
+      L.push('  стена ' + w.side + ': длина ' + FP.wlen(w).toFixed(2) + ' м; ' + (ops.join(', ') || 'без проёмов'));
+    });
+    const CF = FP.conflicts(f, walls), list = FP.furnInRoom(f, r);
+    L.push('', 'МЕБЕЛЬ И РАССТАНОВКА (' + list.length + '):');
+    list.forEach(m => { const c = CF.get(m.id); L.push('  ' + m.kind + ' «' + m.name + '» x=' + n2(m.x) + ' y=' + n2(m.y) + ' поворот=' + n2(m.rotation || 0) + (m.flipX ? ' зеркально' : '') + ' ' + n2(m.width) + '×' + n2(m.depth) + '×' + n2(m.height) + (m.elev ? ' над полом ' + n2(m.elev) : '') + ' цвет ' + m.color + (c ? '  ⚠ ' + c.map(q => q.text).join('; ') : '')); });
+    return L.join('\n');
+  }
+  function copyRoomLog(r) {
+    const t = roomLog(r);
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => alert('Расстановка комнаты скопирована'), () => FP.ui.autofillReport(t));   // нет доступа к буферу: покажем окно с кнопкой «Копировать»
+  }
+
   function roomP(root, r) {
     root.appendChild(el('h3', '', 'Комната'));
     root.appendChild(row('Название', textIn(r, 'name')));
@@ -205,7 +225,8 @@
     root.appendChild(el('div', 'stat', '<span>Площадь</span><b>' + FP.roomArea(r).toFixed(2) + ' м²</b>'));
 
     root.appendChild(el('div', 'stat', '<span>Периметр</span><b>' + FP.roomPerim(r).toFixed(2) + ' м</b>'));
-    const baf = el('div', 'btns'); baf.appendChild(btn('✨ Заполнить мебелью и светом…', () => FP.ui.autofill(r))); root.appendChild(baf);
+    const baf = el('div', 'btns'); baf.appendChild(btn('✨ Заполнить мебелью и светом…', () => FP.ui.autofill(r)));
+    baf.appendChild(btn('📋 Копировать расстановку комнаты', () => copyRoomLog(r))); root.appendChild(baf);
     shapeBlock(root, r); if (r.poly) polyBlock(root, r); mergeBlock(root, r);
 
     root.appendChild(el('h4', '', 'Пол'));
@@ -306,6 +327,11 @@
       root.appendChild(matRow('Подоконник: материал', 'sill', FP.sillSpec(o), s => { o.sillFin = s; }, 'Подоконник'));
       root.appendChild(row('Вынос в комнату, м', numIn(Object.assign(o, { sillIn: o.sillIn != null ? o.sillIn : .1 }), 'sillIn', { min: 0 })));
       root.appendChild(row('Толщина доски, м', numIn(Object.assign(o, { sillT: o.sillT || .035 }), 'sillT', { min: .01 })));
+      root.appendChild(row('Штора', chkIn(!!o.curtain, v => { o.curtain = v; })));
+      if (o.curtain) {
+        root.appendChild(row('Штора закрыта', chkIn(!!o.cclosed, v => { o.cclosed = v; })));
+        if (!o.ccolor) o.ccolor = '#d9d2c3'; colorBlock(root, 'Цвет шторы', o, 'ccolor', FP.FPAL);
+      }
     }
 
     if (o.kind === 'door') {

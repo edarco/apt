@@ -11,6 +11,7 @@
   let env = null, dome = null, fill = null, envMats = null, skyTex = {}, doors = [], selH = null, pick3 = null, updSel = false, lampLights = [];
 
   let fdoors = []; const fAng = new Map(), FD_A = 100 * Math.PI / 180;     // дверцы мебели: список, текущие углы, угол открытия
+  let curts = []; const cK = new Map();                                    // шторы: список в сцене, степень закрытия (0 — раздвинута, 1 — закрыта)
 
   const dAng = new Map(), DOOR_A = 82 * Math.PI / 180;
   const vel = { x: 0, z: 0 }; let bobT = 0;
@@ -172,7 +173,7 @@
   'base_oven tall_oven cab_washer vanity boiler'.split(' ').forEach(k => { DEF_FIN[k] = 'plastic'; });
   'hob_gas basin_wall toilet_wall beauty_cart shower_open shower_curtain'.split(' ').forEach(k => { DEF_FIN[k] = 'gloss'; });
   'beauty_bed beauty_stool'.split(' ').forEach(k => { DEF_FIN[k] = 'leather'; });
-  'wall_books'.split(' ').forEach(k => { DEF_FIN[k] = 'wood'; });
+  'wall_books tvstand_wall shelf_dishes shelf_cosmo shelf_decor'.split(' ').forEach(k => { DEF_FIN[k] = 'wood'; });
 
   const finOf = m => (m.finish && m.finish !== 'auto' && STY[m.finish]) ? m.finish : (DEF_FIN[m.kind] || 'matte');
 
@@ -408,7 +409,7 @@
     // яркость = экспозиция (вечером), цвета не «выжигаются»
     renderer.toneMapping = opt.night ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     renderer.toneMappingExposure = opt.night ? opt.lamp : 1;
-    doors = []; lampLights = []; fdoors = [];
+    doors = []; lampLights = []; fdoors = []; curts = [];
     const f = FP.floor(), st = FP.data.settings, walls = FP.getWalls(f), walking = isWalk();
     const wm = (walking && opt.walls !== 'glass') ? 'full' : opt.walls, cutH = wm === 'cut' ? opt.cut : undefined;
 
@@ -497,7 +498,17 @@
           put(p.s, p.s + fq, p.z0, p.z1, T, fr); put(p.e - fq, p.e, p.z0, p.z1, T, fr);                    // рама
           put(p.s, p.e, p.z1 - fq, p.z1, T, fr); put(p.s, p.e, p.z0, p.z0 + fq, T, fr);
           put(mid - .02, mid + .02, p.z0, p.z1, .05, fr);                                                 // импост
+
           { const sm = sill(w, p, ux, uy, ang); sm.userData.sel = curSel; }                              // подоконник
+          if (p.o.curtain) {                                                                              // штора: две створки, закрываются двойным кликом
+            const cp = FP.openPos(w, p.o), cw = (p.e - p.s) + .5, topY = Math.min(f.height - .08, p.z1 + .3), botY = .06, chh = topY - botY, s0c = (p.s + p.e) / 2;
+            const sg = (cp.nx * -uy + cp.ny * ux) >= 0 ? 1 : -1, zc = sg * (w.t / 2 + .07);              // смещение в сторону комнаты
+            const cg = new THREE.Group(); cg.position.set(w.x1 + ux * s0c, 0, w.y1 + uy * s0c); cg.rotation.y = ang;
+            const fm = mat(p.o.ccolor || '#d9d2c3', { side: THREE.DoubleSide, emissive: new THREE.Color(p.o.ccolor || '#d9d2c3'), emissiveIntensity: .12 });
+            const pn = [0, 1].map(() => { const q = new THREE.Mesh(bgeo(1, chh, .04), fm); q.position.set(0, botY + chh / 2, zc); q.receiveShadow = true; q.userData.sel = curSel; cg.add(q); return q; });
+            const rod = box(cw + .1, .025, .025, '#6f5a44', 0, topY + .02, zc); rod.userData.sel = curSel; cg.add(rod);
+            root.add(cg); curts.push({ o: p.o, pn, cw });
+          }
         } else if (p.type === 'door' && p.own) {
           const o = p.o, pos = FP.openPos(w, o), wd = p.e - p.s, hAlong = o.flip ? p.e : p.s, hgt = p.z1 - p.z0;
           const al = o.flip ? -1 : 1, sw = o.swing === -1 ? -1 : 1, dX = ux * al, dY = uy * al, nX = pos.nx * sw, nY = pos.ny * sw;
@@ -699,13 +710,23 @@
     });
   }
 
+  function animCurtains(dt) {                            // плавное закрытие/раскрытие штор; закрытая штора отбрасывает тень (солнце не проходит)
+    curts.forEach(c => {
+      const t = c.o.cclosed ? 1 : 0; let k = cK.has(c.o.id) ? cK.get(c.o.id) : t;
+      if (Math.abs(k - t) > 1e-3) k += (t - k) * Math.min(1, dt * 4); else k = t;
+      cK.set(c.o.id, k);
+      const wp = c.cw * (.13 + .37 * k);                  // ширина створки: 13% (раздвинута) … 50% (закрыта)
+      c.pn.forEach((q, i) => { const sd = i ? 1 : -1; q.scale.x = wp; q.position.x = sd * (c.cw / 2 - wp / 2); q.castShadow = k > .5; });
+    });
+  }
+
   function loop(t) {
     raf = requestAnimationFrame(loop); const dt = Math.min(.05, (t - last) / 1000 || 0); last = t;
 
     if (needs) { build(); needs = false; updSel = true; }
     if (updSel) { markSel(); updSel = false; }
     // if (needs) { const t0 = performance.now(); build(); needs = false; console.log('build ms:', Math.round(performance.now() - t0)); }
-    animDoors(dt);
+    animDoors(dt); animCurtains(dt);
     if (isWalk()) updateWalk(dt);
     placeCamera(); if (dome && dome.visible) dome.position.copy(camera.position);
     renderer.render(scene, camera);
@@ -789,6 +810,7 @@
         if (sl && sl.type === 'opening') {                  // двойной клик по двери: открыть / закрыть
           const dop = FP.floor().openings.find(q => q.id === sl.id);
           if (dop && dop.kind === 'door' && !dop.locked) { FP.snap(); dop.open = !dop.open; FP.select('opening', dop.id); FP.changed(); return; }
+          if (dop && dop.kind === 'window' && dop.curtain) { FP.snap(); dop.cclosed = !dop.cclosed; FP.select('opening', dop.id); FP.changed(); return; }   // окно со шторой: закрыть / открыть
         }
         let o = h.object; while (o && !(o.userData && o.userData.fid)) o = o.parent;
         if (!o) continue;

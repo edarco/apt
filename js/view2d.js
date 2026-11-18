@@ -375,13 +375,17 @@
       .map(a => ({ s: Math.max(0, a.s), e: Math.min(L, a.e), k: a.o.kind })).filter(a => a.e - a.s > .01).sort((p, q) => p.s - q.s);
     if (!sp.length) return;
     const ux = (w.x2 - w.x1) / L, uy = (w.y2 - w.y1) / L;
-    const inn = w.nx != null ? [w.nx, w.ny] : w.side ? { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[w.side] : [-uy, ux], out = [-inn[0], -inn[1]];   // наружу от комнаты
-    const row = (w.room && !w.room.poly && (w.side === 's' || w.side === 'e')) ? 14 : 32;   // у стен с общей длиной (север/запад/многоугольник) — вторым рядом
+
+    const inn = w.nx != null ? [w.nx, w.ny] : w.side ? { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[w.side] : [-uy, ux], out = w.room ? inn : [-inn[0], -inn[1]];   // у стен комнат — ВНУТРИ комнаты (по внутренней грани), у свободных стен — снаружи
+    const row = w.room ? 14 : 32;
+
     const off = Math.max(1.5, w.t * V.s) / 2 + row;
     const pt = s => [sx(w.x1 + ux * s) + out[0] * off, sy(w.y1 + uy * s) + out[1] * off];
     const pcs = []; let cur = 0;
-    sp.forEach(a => { const s0 = Math.max(a.s, cur); if (a.e <= s0) return; if (s0 > cur + .005) pcs.push({ a: cur, b: s0, k: 'wall' }); pcs.push({ a: s0, b: a.e, k: a.k }); cur = a.e; });
-    if (cur < L - .005) pcs.push({ a: cur, b: L, k: 'wall' });
+
+    sp.forEach(a => { const s0 = Math.max(a.s, cur); if (a.e <= s0) return; pcs.push({ a: cur, b: s0, k: 'wall' }); pcs.push({ a: s0, b: a.e, k: a.k }); cur = a.e; });   // участки стены между проёмами показываем всегда, даже 0.00
+    pcs.push({ a: cur, b: L, k: 'wall' });
+
     c.save(); c.strokeStyle = '#8c8c8c'; c.lineWidth = 1; c.beginPath();
     const A = pt(0), B = pt(L); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]);
     pcs.forEach(q => [q.a, q.b].forEach(s => { const p = pt(s); c.moveTo(p[0] - out[0] * 3, p[1] - out[1] * 3); c.lineTo(p[0] + out[0] * 3, p[1] + out[1] * 3); }));
@@ -389,11 +393,14 @@
     let ang = Math.atan2(uy, ux); if (ang >= Math.PI / 2 - 1e-6) ang -= Math.PI; else if (ang < -Math.PI / 2 - 1e-6) ang += Math.PI;   // текст не вверх ногами
     const COL = { wall: C.lblTx, window: '#2f78d0', door: '#d9822b', gap: '#8a8a8a' };
     c.font = '10px system-ui';
+
+    let nar = 0;
     pcs.forEach(q => {
-      const t = (q.b - q.a).toFixed(2);
-      if ((q.b - q.a) * V.s < c.measureText(t).width + 8) return;                // участок слишком короткий для подписи: приблизьте план колесом
-      const p = pt((q.a + q.b) / 2); lblS(t, p[0], p[1], ang, COL[q.k] || C.lblTx);
+      const t = (q.b - q.a).toFixed(2), narrow = (q.b - q.a) * V.s < c.measureText(t).width + 8;
+      const p = pt((q.a + q.b) / 2), sh = narrow ? 13 * (1 + (nar++ % 2)) : 0;      // узкие участки: подпись выносим на 13 / 26 px вглубь, чтобы не слипались
+      lblS(t, p[0] + out[0] * sh, p[1] + out[1] * sh, ang, COL[q.k] || C.lblTx);
     });
+
   }
 
   V.draw = function () {
@@ -749,6 +756,7 @@
     if (V.tool === 'select') {
       const p = P(e), h = hitTest(wx(p.x), wy(p.y)), op = h && h.type === 'opening' && FP.floor().openings.find(q => q.id === h.id);
       if (op && op.kind === 'door') { if (!op.locked) { FP.snap(); op.open = !op.open; FP.changed(); } return; }   // двойной клик по двери: открыть / закрыть
+      if (op && op.kind === 'window' && op.curtain) { FP.snap(); op.cclosed = !op.cclosed; FP.changed(); return; }   // окно со шторой: закрыть / открыть
       FP.ui.walkHere(wx(p.x), wy(p.y));                                                                              // иначе: встать в эту точку в 3D
     }
   });
