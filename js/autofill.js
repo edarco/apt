@@ -309,6 +309,17 @@
     return null;
   }
 
+  // как flexAny, но отклоняет места, после которых между дверями не остаётся прохода (≥ 50 см)
+  function flexAnyConn(ctx, it, sides, froms, wmin, wmax) {
+    for (const s of sides) for (const f0 of froms) {
+      const mark = ctx.added.length, m = putFlex(ctx, it, s, f0, wmin, Math.min(wmax, len(ctx, s)));
+      if (!m) continue;
+      if (walkInfo(ctx).conn) return m;
+      rollback(ctx, mark);
+    }
+    return null;
+  }
+
   // НОВОЕ: ТВ-тумба + телевизор парой, ближе всего к target (центр дивана) вдоль стены side. Если телевизор не встаёт (окно), двигаем тумбу дальше
   function tvPair(ctx, side, target) {
     const TV = I('tv', 'Телевизор', 1.23, .06, .72, '#1a1a1a', 'x', 1.0), [lo, hi] = span(ctx, side);
@@ -703,8 +714,8 @@
         if (on.tv && !(bm && tvNear(ctx, OPP[v.main], al(bm, v.main)))) miss(ctx, 'телевизор', 1);   // только напротив кровати, ближе всего к её центру
 
         if (on.ward !== false) {
-          if (!flexAny(ctx, I('wardrobe', 'Шкаф', 1.8, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 2.6)) miss(ctx, 'шкаф', 12);
-          else if (on.ward2 && A >= 12 && !flexAny(ctx, I('wardrobe', 'Шкаф 2', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['end', 'start'], .8, 2.0)) miss(ctx, 'второй шкаф', 2);
+          if (!flexAnyConn(ctx, I('wardrobe', 'Шкаф', 1.8, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 2.6)) miss(ctx, 'шкаф', 12);
+          else if (on.ward2 && A >= 12 && !flexAnyConn(ctx, I('wardrobe', 'Шкаф 2', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['end', 'start'], .8, 2.0)) miss(ctx, 'второй шкаф', 2);
         }
 
         if (on.vanity) { let vt = null; for (const s of sides) for (const p of ['start', 'end', 'mid']) vt = vt || vanitySet(ctx, s, p); if (!vt) miss(ctx, 'туалетный столик', 2); }   // НОВОЕ
@@ -899,7 +910,8 @@
         if (dk) { const sd = ROT[dk.rotation]; if (sd) for (const g of [1, -1]) pn = pn || put(ctx, PEN, sd, al(dk, sd) + g * (dk.width / 2 + .3)); }
         if (!pn && !fitAny(ctx, PEN, [.6], sides, ['start', 'end'])) miss(ctx, 'шкаф-пенал', 4);
       }
-      if (on.ward !== false && !flexAny(ctx, I('wardrobe', 'Гардероб', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 1.8)) miss(ctx, 'гардероб', 12);
+
+      if (on.ward !== false && !flexAnyConn(ctx, I('wardrobe', 'Гардероб', 1.2, .6, 2.2, '#d6cdbb', 'k'), sides, ['start', 'end'], .8, 1.8)) miss(ctx, 'гардероб', 12);
 
       if (on.shelf && !flexAny(ctx, I('shelf', 'Стеллаж', 1, .35, 1.9, '#b99570', 'w'), sides, ['start', 'end', 'mid'], .8, 1.4)) miss(ctx, 'стеллаж', 2);
       if (on.mirror && !fitAny(ctx, I('mirror_full', 'Зеркало в рост', .5, .04, 1.7, '#6f5a44', 'x', .1), [.5], sides, ['end', 'start', 'mid'])) miss(ctx, 'зеркало', 1);
@@ -935,6 +947,19 @@
     }
     return { open: free / (nx * ny), conn };
   }
+
+  // если проход к дверям перекрыт — убираем необязательные предметы по очереди (стулья, кресла, комод …), пока проход не появится
+  const OPTIONAL = ['chair', 'mirror_full', 'armchair', 'pouf', 'dresser', 'desk', 'tvstand', 'tvstand_wall', 'shelf', 'shelf_dishes', 'plant'];
+  function prunePassage(ctx) {
+    if (ctx.o.type === 'kitchen' || ctx.o.type === 'bath') return;
+    for (let g = 0; g < 8 && !walkInfo(ctx).conn; g++) {
+      const k = OPTIONAL.find(kd => ctx.added.some(m => m.kind === kd)); if (!k) return;
+      const m = ctx.added.filter(q => q.kind === k).pop();
+      ctx.added.splice(ctx.added.indexOf(m), 1); ctx.all.splice(ctx.all.lastIndexOf(m), 1);
+      ctx.parts.push(['убрано ради прохода: ' + m.name, -1]); ctx.log.push('  убрал «' + m.name + '» — перекрывал проход к дверям');
+    }
+  }
+
   function finish(ctx) {
     ctx.parts.push(['предметов в комнате', ctx.added.filter(m => !['backsplash', 'worktop', 'hob_gas', 'wall_cab', 'corner_wall'].includes(m.kind)).length * .8]);
     const w = walkInfo(ctx);
@@ -1070,6 +1095,7 @@
         R.run(ctx, v);
         (o.extra || []).forEach(it => { if (!fitAny(ctx, I(it[0], it[1], it[2], it[3], it[4], it[5], 'x', it[6]), [it[2]], byLen(ctx), ['mid', 'start', 'end'])) miss(ctx, it[1], 2); });
         ensureRequired(ctx, o);                                                  // НОВОЕ
+        prunePassage(ctx);
       } catch (e) { console.error('[autofill] ошибка в варианте', v.label, e); head.push('ОШИБКА в варианте «' + v.label + '»: ' + e.message); continue; }
       const score = finish(ctx);
       res.push({ label: v.label, score, fatal: ctx.fatal, disc: ctx.disc, parts: ctx.parts.slice(), log: ctx.log.slice(), skipped: ctx.skipped.slice(), items: ctx.added.map(m => Object.assign({}, m)), sig: sigOf(ctx.added) });
