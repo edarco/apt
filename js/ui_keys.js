@@ -29,7 +29,7 @@
 
     else if (k.startsWith('Arrow') && FP.selObj()) {                 // есть выбор: двигаем объект
       e.preventDefault();
-      const st = e.shiftKey ? .01 : FP.settings().snap;
+      const st = (e.shiftKey || e.altKey) ? .01 : FP.settings().snap;     // Shift или Alt = 1 см
       FP.nudge(k === 'ArrowLeft' ? -st : k === 'ArrowRight' ? st : 0, k === 'ArrowUp' ? -st : k === 'ArrowDown' ? st : 0);
     }
     else if (k.startsWith('Arrow')) {                                // нет выбора: двигаем холст

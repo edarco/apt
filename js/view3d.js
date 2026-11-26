@@ -171,7 +171,7 @@
     .forEach(a => a[1].split(' ').forEach(k => { DEF_FIN[k] = a[0]; }));
 
   'base_oven tall_oven cab_washer vanity boiler'.split(' ').forEach(k => { DEF_FIN[k] = 'plastic'; });
-  'hob_gas basin_wall toilet_wall beauty_cart shower_open shower_curtain'.split(' ').forEach(k => { DEF_FIN[k] = 'gloss'; });
+  'hob_gas basin_wall toilet_wall beauty_cart shower_open shower_curtain shower_straight'.split(' ').forEach(k => { DEF_FIN[k] = 'gloss'; });
   'beauty_bed beauty_stool'.split(' ').forEach(k => { DEF_FIN[k] = 'leather'; });
   'wall_books tvstand_wall shelf_dishes shelf_cosmo shelf_decor'.split(' ').forEach(k => { DEF_FIN[k] = 'wood'; });
 

@@ -31,11 +31,11 @@
   const TYPES = [['kitchen', 'Кухня'], ['bedroom', 'Спальня'], ['kids', 'Детская спальня'], ['living', 'Гостиная / зал'], ['bath', 'Ванная / санузел'], ['office', 'Рабочая комната'], ['hall', 'Коридор / прихожая'], ['cosmo', 'Косметологическая']];
   FP.RTYPES = TYPES;                                // нужен панели свойств комнаты
   const OPTS = {
-    kitchen: [['dining', 'Обеденный стол со стульями', true], ['hob', 'Встроенная газовая панель + духовка', true], ['dish', 'Посудомоечная машина', true], ['washer', 'Стиральная машина в шкафу', true], ['tall', 'Высокий шкаф-пенал до потолка', true]],
-    bedroom: [['ward', 'Шкаф (основной)', true], ['tv', 'Телевизор на стене напротив кровати', true], ['vanity', 'Туалетный (дамский) столик со стулом', true], ['chair', 'Стул у стены', true], ['dresser', 'Комод', true], ['ward2', 'Второй шкаф', true], ['mirror', 'Зеркало в рост', true], ['armchair', 'Кресло', false], ['desk', 'Рабочее место', false], ['rug', 'Ковёр', false]],
+    kitchen: [['dining', 'Обеденный стол со стульями', true], ['hob', 'Встроенная газовая панель + духовка', true], ['dish', 'Посудомоечная машина', true], ['washer', 'Стиральная машина в шкафу', true], ['tall', 'Высокий шкаф-пенал до потолка', true], ['boiler', 'Газовый котёл над холодильником (вместо шкафа)', true]],
+    bedroom: [['ward', 'Шкаф (основной)', true], ['ns', 'Прикроватные тумбы', false], ['tv', 'Телевизор на стене напротив кровати', true], ['vanity', 'Туалетный (дамский) столик со стулом', true], ['chair', 'Стул у стены', true], ['dresser', 'Комод', true], ['ward2', 'Второй шкаф', true], ['mirror', 'Зеркало в рост', true], ['armchair', 'Кресло', false], ['desk', 'Рабочее место', false], ['rug', 'Ковёр', false]],
     kids: [['ward', 'Гардероб', true], ['pc', 'Стол с компьютером (иначе обычный стол)', true], ['pen', 'Шкаф-пенал для тетрадей и учебников', true], ['shelf', 'Стеллаж для книг и игрушек', false], ['rug', 'Ковёр', false], ['mirror', 'Зеркало в рост', false]],
-    living: [['tv', 'ТВ-тумба и телевизор', true], ['tvwall', 'ТВ-тумба подвесная (к стене, без ножек)', false], ['shelfd', 'Стеллаж с посудой вместо книг', false], ['lsofa', 'Угловой диван', true], ['dining', 'Обеденный стол со стульями', false], ['oval', 'Овальный стол со стульями', true], ['armchair', 'Два кресла', true], ['shelf', 'Стеллаж', true], ['board', 'Сервант / комод с полкой', false], ['plant', 'Растение', false], ['rug', 'Ковёр', false]],
-    bath: [['shower', 'Душ вместо ванны', true], ['inst', 'Подвесной унитаз (инсталляция) + шкаф над ним до потолка', true], ['laundry', 'Шкафчик с полками для грязной одежды', true], ['washer', 'Стиральная машина', false]],
+    living: [['tv', 'ТВ-тумба и телевизор', true], ['tvwall', 'ТВ-тумба подвесная (к стене, без ножек)', true], ['shelfd', 'Стеллаж с посудой вместо книг', true], ['lsofa', 'Угловой диван', true], ['dining', 'Обеденный стол со стульями', false], ['oval', 'Овальный стол со стульями', true], ['armchair', 'Два кресла', true], ['shelf', 'Стеллаж', false], ['board', 'Сервант / комод с полкой', false], ['plant', 'Растение', true], ['rug', 'Ковёр', false]],
+    bath: [['shower', 'Душ вместо ванны', true], ['shstr', 'Душ с прямой шторкой от стены до стены (стена 1,2–2,2 м)', true], ['inst', 'Подвесной унитаз (инсталляция) + шкаф над ним до потолка', true], ['laundry', 'Шкафчик с полками для грязной одежды', true], ['washer', 'Стиральная машина', false]],
     office: [['wardrobe', 'Шкаф', true]],
     hall: [['mirror', 'Зеркало в рост', true]],
     cosmo: [['sink', 'Умывальник с тумбой', false], ['shelf', 'Стеллаж', true], ['cab', 'Шкафчик навесной', true], ['mirror', 'Зеркало', true], ['lamp', 'Торшер', false]]
@@ -43,7 +43,8 @@
   const STYLES = {
     light: { name: 'Светлый (скандинавский)', floor: 'lam_oak_light', wet: 'tile_sq60_lgrey', wall: '#f2efe9', s: '#d9d4c7', w: '#d8c3a0', k: '#ece8de' },
     warm: { name: 'Тёплый (дерево)', floor: 'lam_oak_nat', wet: 'tile_sq60_beige', wall: '#e6dcc7', s: '#bf8c6c', w: '#a8794f', k: '#c9b08a' },
-    dark: { name: 'Тёмный современный', floor: 'lam_oak_dark', wet: 'tile_sq60_graph', wall: '#a7a8a8', s: '#5c5f64', w: '#6b4429', k: '#3a3d42' },
+    dark: { name: 'Тёмный современный', floor: 'lam_oak_nat', wet: 'tile_sq60_graph', wall: '#a7a8a8', s: '#5c5f64', w: '#6b4429', k: '#3a3d42',
+      fl: { kitchen: 'tile_wood_oak', hall: 'tile_wood_oak', bath: 'tile_sq60_beige', cosmo: 'lam_oak_nat' }, bu: 'paint_18', bw: { m: 'tile_sq60_beige', c: '#ebdec7' } },
     girl: { name: 'Для девочки (яркий розовый)', floor: 'lam_oak_light', wet: 'tile_sq60_lgrey', wall: '#f7b2cc', s: '#ff8fb8', w: '#fbd5e3', k: '#f9c6da' },
     keep: { name: 'Не менять цвета' }
   };
@@ -197,7 +198,7 @@
     return true;
   }
   // сколько метров должно остаться свободным перед предметом (открыть дверцу, встать, пройти)
-  const FRONT = { wardrobe: .75, wardrobe_mir: .75, dresser: .6, shelf: .45, fridge: .8, tall_cab: .7, counter: .6, drawer_base: .6, sink: .75, base_oven: .75, stove: .75, dishwasher: .65, cab_washer: .7, washer: .65, vanity: .6, toilet: .45, toilet_wall: .45, shower_open: .5, shoe_rack: .5 };
+  const FRONT = { wardrobe: .6, wardrobe_mir: .6, dresser: .6, shelf: .45, fridge: .8, tall_cab: .7, counter: .6, drawer_base: .6, sink: .75, base_oven: .75, stove: .75, dishwasher: .65, cab_washer: .7, washer: .65, vanity: .6, toilet: .45, toilet_wall: .45, shower_open: .5, shoe_rack: .5 };
   const SIDEC = { toilet: .15, toilet_wall: .15 };      // свободно по бокам
 
   const KB0 = ['counter', 'sink', 'base_oven', 'stove', 'dishwasher', 'cab_washer', 'corner_cab', 'tall_cab', 'fridge'];
@@ -474,12 +475,11 @@
   }
 
   function vanitySet(ctx, side, pos) {              // НОВОЕ: неглубокий дамский столик (глубина 0,45 м) + стул + зеркало над ним
-    const tb = I('desk', 'Туалетный столик', 1, .45, .75, '#b99570', 'w'), ch = I('chair', 'Стул', .45, .5, .85, '#b18c68', 'w'), mark = ctx.added.length;
+    const tb = I('desk', 'Туалетный столик', 1, .45, .75, '#b99570', 'w'), ch = I('pouf', 'Пуф', .45, .45, .4, '#bf8c6c', 's'), mark = ctx.added.length;
     const dm = put(ctx, tb, side, pos); if (!dm) return null;
-    const n = DIR[side], e = tb.d / 2 + ch.d / 2 - .1;
-    if (!tryAdd(ctx, mk(ctx, ch, dm.x + n[0] * e, dm.y + n[1] * e, (n[2] + 180) % 360))) { rollback(ctx, mark); return null; }
-    put(ctx, I('mirror', 'Зеркало', .6, .03, .8, '#8b6b4a', 'x', 1.1), side, al(dm, side), { w: .6 });
-    return dm;
+    const n = DIR[side], e = tb.d / 2;                                         // пуф наполовину задвинут под столик
+    if (!tryAdd(ctx, mk(ctx, ch, dm.x + n[0] * e, dm.y + n[1] * e, 0))) { rollback(ctx, mark); return null; }
+    return dm;                                                                  // зеркала над столиком нет
   }
 
   // ---------- сценарии: vars(ctx) — список вариантов, run(ctx, v) — расстановка одного варианта ----------
@@ -556,7 +556,10 @@
             const o2 = put(ctx, it, m, c0 + sg * (cur + it.w / 2)); if (!o2) return;
             cur += it.w;
             if (o2.kind === 'base_oven') add(ctx, mk(ctx, HOB, o2.x, o2.y, o2.rotation));   // газовая панель сверху
-            if (o2.kind === 'fridge') put(ctx, CABF, m, al(o2, m), { w: .6 });              // шкаф над холодильником до потолка
+            if (o2.kind === 'fridge') {
+              if (on.boiler) put(ctx, I('boiler', 'Газовый котёл (с дверцей)', .6, .3, 1, '#6b6e72', 'x', 2), m, al(o2, m), { w: .6 });   // котёл над холодильником
+              else put(ctx, CABF, m, al(o2, m), { w: .6 });                                                                                 // шкаф над холодильником до потолка
+            }
           });
           put(ctx, I('counter', 'Угловой модуль', .6, KD, .9, KC, 'k'), m, c0 + sg * (L - .3));   // угол: последние 60 см линии
           // смежная стена: от угла внутрь комнаты
@@ -704,8 +707,8 @@
         if (!bm) miss(ctx, 'кровать', 40);
         else {
           const a = al(bm, v.main); let n = 0;
-          if (put(ctx, ns, v.main, a - bw / 2 - .245)) n++;
-          if (put(ctx, ns, v.main, a + bw / 2 + .245)) n++;
+          if (on.ns !== false && put(ctx, ns, v.main, a - bw / 2 - .245)) n++;
+          if (on.ns !== false && put(ctx, ns, v.main, a + bw / 2 + .245)) n++;
           bonus(ctx, 'прикроватные тумбы', n * 3); bonus(ctx, 'окна/двери на стене изголовья', -cnt(ctx, v.main, 'window') * 3 - cnt(ctx, v.main, 'door') * 2);
           if (on.rug) addRug(ctx, bm, v.main, Math.min(bw + .8, len(ctx, v.main) - .2), 2.0, .35);
         }
@@ -762,6 +765,13 @@
         if (sm) {
           const n = DIR[v.main], P = perp(ctx, v.main);
           if (!isL && P >= 3.2) tryAdd(ctx, mk(ctx, I('table', 'Журнальный стол', 1.1, .65, .4, '#b99570', 'w'), sm.x + n[0] * 1.2, sm.y + n[1] * 1.2, n[2]));
+          if (isL && P >= 3.2) {                                                // НОВОЕ: стол и пуф рядом с лежанкой L-дивана
+            const a = sm.rotation * Math.PI / 180, ux = Math.cos(a), uy = Math.sin(a), sa = sm.flipX ? 1 : -1;   // sa: направление «от лежанки»
+            const at = (lx, lz) => [sm.x + ux * lx - uy * lz, sm.y + uy * lx + ux * lz];
+            const tp = at(sa * .4, .55), pp = at(sa * 1.3, .5);
+            if (tryAdd(ctx, mk(ctx, I('table', 'Журнальный стол', 1.1, .65, .4, '#6b6e72', 'x'), tp[0], tp[1], sm.rotation)))
+              tryAdd(ctx, mk(ctx, I('pouf', 'Пуф', .45, .45, .4, '#3a3d42', 'x'), pp[0], pp[1], 0));
+          }
           if (on.rug && P >= 4.4) addRug(ctx, sm, v.main, Math.min(2.4, len(ctx, v.main) - .8), 1.6, 1.25);
         }
 
@@ -775,8 +785,8 @@
         if (on.dining && !placeTable(ctx, [[1.4, .9]], false, 'обеденный стол', near, v.tb === 'corner')) miss(ctx, 'обеденный стол', 6);
         if (on.oval && !placeTable(ctx, [[1.4, .9]], true, 'овальный стол', near, v.tb === 'corner')) miss(ctx, 'овальный стол', 6);
 
-        if (on.armchair) for (let i = 0; i < 2; i++) if (!fitAny(ctx, I('armchair', 'Кресло', .85, .85, .8, '#bf8c6c', 's'), [.85], L, ['start', 'end'])) { if (!i) miss(ctx, 'кресло', 3); break; }   // два кресла
-        if (on.shelf && !flexAny(ctx, I(on.shelfd ? 'shelf_dishes' : 'shelf', on.shelfd ? 'Стеллаж с посудой' : 'Стеллаж', 1, .35, 1.9, '#b99570', 'w'), L, ['start', 'end', 'mid'], .8, 1.6)) miss(ctx, 'стеллаж', 3);
+        if (on.armchair) for (let i = 0; i < 1; i++) if (!fitAny(ctx, I('armchair', 'Кресло', .85, .85, .8, '#bf8c6c', 's'), [.85], L, ['start', 'end'])) { if (!i) miss(ctx, 'кресло', 3); break; }   // одно кресло
+        if (on.shelf && !flexAny(ctx, I(on.shelfd ? 'shelf_dishes' : 'shelf', on.shelfd ? 'Стеллаж с посудой' : 'Стеллаж', 1, .35, 1.9, '#b99570', 'w'), L, ['start', 'end', 'mid'], 1, 1)) miss(ctx, 'стеллаж', 3);
         if (on.board) {                                                         // сервант с полкой над ним
           const sb = flexAny(ctx, I('dresser', 'Сервант / комод', 1.2, .5, .85, '#c9b08a', 'w'), L, ['mid', 'start', 'end'], 1.0, 1.8);
           if (!sb) miss(ctx, 'сервант', 3); else { const s0 = ROT[sb.rotation]; if (s0) put(ctx, I('wall_shelf', 'Полка настенная', 1, .22, .04, '#b99570', 'w', 1.5), s0, al(sb, s0), { w: Math.min(sb.width, 1.2) }); }
@@ -798,6 +808,13 @@
         if (!wc) {
           let tub = null;
           if (!on.shower && A >= 4.5) for (const w of [1.7, 1.5, 1.3]) tub = tub || put(ctx, I('bath', 'Ванна', w, .8, .58, WH, 'x'), v.bs, v.bd, { w });
+          if (!tub && on.shstr) {                                               // НОВОЕ: прямая шторка от стены до стены
+            for (const s of [v.bs].concat(SIDES.filter(q => q !== v.bs))) {
+              const Lw = +len(ctx, s).toFixed(3); if (Lw < 1.2 || Lw > 2.2) continue;   // подходит только стена 1,2–2,2 м
+              tub = put(ctx, I('shower_straight', 'Душ: поддон + прямая шторка', Lw, .9, 2, '#bfe0ee', 'x'), s, 'mid', { w: Lw });
+              if (tub) break;
+            }
+          }
           if (!tub) {                                                           // душ по умолчанию: поддон + шторка 0,9×0,9, строго в углу
             const SH = I('shower_curtain', 'Душ: поддон + шторка', .9, .9, 2, '#bfe0ee', 'x');
             const inC = m => { const s0 = ROT[m.rotation], [lo, hi] = span(ctx, s0), c = al(m, s0); return Math.min(c - m.width / 2 - lo, hi - c - m.width / 2) < .06; };
@@ -815,17 +832,20 @@
           const s0 = ROT[to.rotation], boxI = w => I('inst_box', 'Короб инсталляции (ГКЛ до потолка)', w, .25, H, WH, 'wall');
           if (s0 && [.6, .5].some(w => put(ctx, boxI(w), s0, al(to, s0), { w }))) { ctx.added.splice(ctx.added.indexOf(to), 1); ctx.added.push(to); }   // унитаз после короба: на плане рисуется поверх
         }
-        const VN = I('vanity', 'Тумба с умывальником', .8, .5, .85, WH, 'x');
+        const VN = I('vanity', 'Тумба с умывальником', .8, .5, .7, WH, 'x', .15);   // подвесная, как у вас
         let vn = fitAny(ctx, VN, wc ? [.6] : [.8, .6, .5], sides, [OPF[v.tp], 'mid', 'start', 'end']);
         if (!vn) vn = fitAny(ctx, I('basin_wall', 'Умывальник подвесной', .55, .45, .3, WH, 'x', .7), [.55, .45], sides, ['mid', 'start', 'end']);   // запасной: маленький подвесной
         if (!vn) miss(ctx, 'умывальник', 20);
         else {                                                                  // зеркало над умывальником
-          const s = ROT[vn.rotation], MI = I('mirror', 'Зеркало', .6, .03, .8, '#8b6b4a', 'x', 1.1);
+          const s = ROT[vn.rotation], MI = I('mirror_round', 'Зеркало круглое', .6, .03, .6, '#a07b52', 'x', 1.2);
           if (s) { if ([.6, .45].some(w => put(ctx, Object.assign({}, MI, { w }), s, al(vn, s), { w }))) bonus(ctx, 'зеркало над умывальником', 3); else miss(ctx, 'зеркало', 2); }
         }
         if (to && vn) bonus(ctx, 'унитаз и умывальник не вплотную', dist(to, vn) >= .8 ? 2 : -2);
-        if (!fitAny(ctx, I('towel_rail', 'Полотенцесушитель', .5, .08, .8, '#c9ccd0', 'x', .6), [.5], sides, ['mid', 'start', 'end'])) miss(ctx, 'полотенцесушитель', 2);
-        if (on.laundry && !fitAny(ctx, I('tall_cab', 'Шкафчик для грязного белья (с полками)', .4, .4, 1.8, KC, 'k'), [.4], sides, ['end', 'start', 'mid'])) miss(ctx, 'шкафчик для белья', 1);
+        let lc = null;                                                          // шкафчик ставим первым: сушитель идёт над ним
+        if (on.laundry) { lc = fitAny(ctx, I('tall_cab', 'Шкафчик для грязного белья (с полками)', .4, .4, 1.0, '#7a5636', 'x'), [.4], sides, ['end', 'start', 'mid']); if (!lc) miss(ctx, 'шкафчик для белья', 1); }
+        const TR = I('towel_rail', 'Полотенцесушитель', .5, .08, .8, '#c9ccd0', 'x', lc ? 1.0 : .6), sT = lc && ROT[lc.rotation];
+        if (!((sT && put(ctx, TR, sT, 'start')) || fitAny(ctx, TR, [.5], sides, ['mid', 'start', 'end']))) miss(ctx, 'полотенцесушитель', 2);
+
         if (on.washer && !wc && !fitAny(ctx, I('washer', 'Стиральная машина', .6, .6, .85, '#f0f0f0', 'x'), [.6], sides, ['start', 'end'])) miss(ctx, 'стиральная машина', 3);
       }
     },
@@ -848,7 +868,12 @@
       vars(ctx) { const out = []; mains(ctx).forEach(m => ['start', 'end'].forEach(d => out.push({ main: m, dir: d, label: 'шкаф у стены «' + SN[m] + '» (' + PN[d] + ')' }))); return out; },
       run(ctx, v) {
         const L = [v.main].concat(byLen(ctx).filter(s => s !== v.main));
-        if (!flexAny(ctx, I('wardrobe', 'Шкаф', 1.2, .45, 2.2, '#d6cdbb', 'k'), [v.main], [v.dir, OPF[v.dir]], .8, 2.4)) miss(ctx, 'шкаф', 12);
+        if (ctx.r.virt) {                                                       // НОВОЕ: часть многоугольного коридора
+          const entr = SIDES.some(s => ctx.sp[s].some(q => q.o.main)), alcove = Math.min(ctx.r.width, ctx.r.depth) < .8;
+          if (!entr && !alcove) return;                                         // проходная часть: пустая
+          if (!entr) { if (!put(ctx, I('wardrobe', 'Шкаф 120', 1.2, .6, 2.2, '#d6cdbb', 'k'), v.main, v.dir)) miss(ctx, 'шкаф', 12); return; }   // тупик: шкаф
+          // часть с входной дверью: шкаф не ставим, дальше обувница / вешалка / зеркало
+        } else if (!flexAny(ctx, I('wardrobe', 'Шкаф', 1.2, .45, 2.2, '#d6cdbb', 'k'), [v.main], [v.dir, OPF[v.dir]], .8, 2.4)) miss(ctx, 'шкаф', 12);
         const sr = fitAny(ctx, I('shoe_rack', 'Обувница', .8, .3, .5, '#d6cdbb', 'k'), [.8], L, ['mid', 'start', 'end']);
         if (!sr) miss(ctx, 'обувница', 6);
         else { const s = ROT[sr.rotation]; if (s) put(ctx, I('hanger', 'Вешалка настенная', .8, .1, .2, '#6f5a44', 'x', 1.6), s, al(sr, s)); }
@@ -879,7 +904,7 @@
           const vn = flexAny(ctx, I('vanity', 'Умывальник с тумбой', .8, .5, .85, WH, 'x'), L, ['start', 'end', 'mid'], .6, 1.2);
           if (!vn) miss(ctx, 'умывальник', 4); else if (on.mirror) { const s = ROT[vn.rotation]; if (s) put(ctx, I('mirror', 'Зеркало', .6, .03, .8, '#8b6b4a', 'x', 1.1), s, al(vn, s)); }
         }
-        if (on.shelf && !flexAny(ctx, I('shelf_cosmo', 'Стеллаж косметолога', 1, .35, 1.9, '#b99570', 'w'), L, ['start', 'end', 'mid'], .8, 1.6)) miss(ctx, 'стеллаж', 3);
+        if (on.shelf && !flexAny(ctx, I('shelf_cosmo', 'Стеллаж косметолога', 1, .35, 1.9, '#b99570', 'w'), L, ['start', 'end', 'mid'], 1, 1)) miss(ctx, 'стеллаж', 3);
         if (on.cab) fitAny(ctx, I('wall_cab', 'Шкафчик навесной', .6, .35, .7, '#e8e4da', 'x', 1.4), [.6], L, ['mid', 'start', 'end']);
         if (on.lamp) fitAny(ctx, I('lamp_floor', 'Торшер', .35, .35, 1.6, '#f7efdc', 'x'), [.35], L, ['end', 'start']);
       }
@@ -1042,8 +1067,9 @@
   // ---------- цвета и материалы ----------
   function applyStyle(f, r, o) {
     const st = STYLES[o.style] || STYLES.keep, t = o.type; if (!st.floor) return;
-    r.floor = { m: (t === 'bath' || t === 'kitchen' || t === 'cosmo') ? st.wet : st.floor, c: null }; r.color = FP.MAT.eff(r.floor);
-    r.fin = { all: { up: { m: 'paint', c: st.wall }, low: t === 'bath' ? { m: 'tile_sq30_white', c: null } : null, h: t === 'bath' ? f.height : 0 } };
+    r.floor = { m: (st.fl && st.fl[t]) || ((t === 'bath' || t === 'kitchen' || t === 'cosmo') ? st.wet : st.floor), c: null }; r.color = FP.MAT.eff(r.floor);
+    r.fin = { all: { up: (t === 'bath' && st.bu) ? { m: st.bu, c: null } : { m: 'paint', c: st.wall },
+      low: t === 'bath' ? (st.bw ? { m: st.bw.m, c: st.bw.c } : { m: 'tile_sq30_white', c: null }) : null, h: t === 'bath' ? f.height : 0 } };
   }
 
   // ---------- свет ----------
