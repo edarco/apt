@@ -246,7 +246,7 @@
   };
 
   // ---------- автоопределение комнат по замкнутым контурам свободных стен ----------
-  FP.roomsFromWalls = function () {
+  FP.roomsFromWalls = function (asInner) {              // asInner = true: нарисованный контур уже и есть внутренняя грань (без сдвига на t/2)
     const f = FP.floor(), segs = f.walls.filter(w => FP.wlen(w) > .05); if (segs.length < 3) return 0;
     const EPS = .04, N = [], len = segs.map(FP.wlen), cuts = segs.map(() => []);
     const node = (x, y) => { for (let i = 0; i < N.length; i++) if (Math.hypot(N[i][0] - x, N[i][1] - y) < EPS) return i; N.push([x, y]); return N.length - 1; };
@@ -303,7 +303,7 @@
       const V = fc.pts.map(i => N[i]); if (V.length < 3 || FP.polyArea(V) < .05) return;
       const th = fc.keys.map(k => E.get(k).t); fc.keys.forEach(k => used.add(k));
       const idx = f.rooms.length + made.length, r = { id: FP.uid(), name: 'Комната ' + (idx + 1), x: 0, y: 0, width: 1, depth: 1, wt: {}, material: 'oak', color: '#c19a6b', floor: { m: 'lam_oak_nat', c: null } };
-      r.poly = FP.inner() ? FP.offsetPoly(V, th.map(t => t / 2)) : V.map(q => q.slice());
+      r.poly = (FP.inner() && !asInner) ? FP.offsetPoly(V, th.map(t => t / 2)) : V.map(q => q.slice());
       th.forEach((t, i) => { r.wt['p' + i] = t; }); FP.fixPoly(r); made.push(r);
     });
     if (!made.length) return 0;

@@ -13,7 +13,7 @@
   const snv = (v, e) => { if (e && e.altKey) return v; const k = set().snap; return +(Math.round(v / k) * k).toFixed(4); };
   V.center = () => ({ x: wx(W / 2), y: wy(H / 2) });
   V.setTool = function (t) {
-    V.tool = t; tmp = null; hover = null;
+    V.tool = t; tmp = null; hover = null; V.guide = null; V.wcur = null;
     cv.style.cursor = V.lock ? 'grab' : ({ select: 'default', pan: 'grab', measure: 'crosshair' }[t] || 'crosshair');
     document.querySelectorAll('#tools button[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
     V.draw();
@@ -50,7 +50,7 @@
     return { d: Math.hypot(px - (w.x1 + ux * t), py - (w.y1 + uy * t)), t };
   }
   function ptSnap(x, y, skip) {
-    const f = FP.floor(), tol = 10 / V.s; let best = null, bd = tol;
+    const f = FP.floor(), tol = 14 / V.s; let best = null, bd = tol;
     const test = (px, py) => { const d = Math.hypot(px - x, py - y); if (d < bd) { bd = d; best = { x: px, y: py }; } };
     f.rooms.forEach(r => {
       if (r === skip) return;
@@ -164,6 +164,7 @@
     } else if (FP.sel.type === 'wall') {
       if (Math.hypot(px - sx(o.x1), py - sy(o.y1)) <= r) return { kind: 'wend', end: 1 };
       if (Math.hypot(px - sx(o.x2), py - sy(o.y2)) <= r) return { kind: 'wend', end: 2 };
+      { const th = wallThumb(o); if (Math.hypot(px - th.x, py - th.y) <= r) return { kind: 'wth' }; }   // НОВОЕ: ручка толщины
     } else if (FP.sel.type === 'furniture') {
       const h = o.depth / 2 + 0.4 * (60 / V.s > 1 ? 1 : 1), a = (o.rotation || 0) * Math.PI / 180;
       if (Math.hypot(px - sx(o.x + h * Math.sin(a)), py - sy(o.y - h * Math.cos(a))) <= r) return { kind: 'rot' };
@@ -497,6 +498,7 @@
       } else if (sel.type === 'wall') {
         c.setLineDash([]); c.lineWidth = Math.max(3, (so.thickness || f.thickness) * s + 2); c.globalAlpha = .45; c.beginPath(); c.moveTo(sx(so.x1), sy(so.y1)); c.lineTo(sx(so.x2), sy(so.y2)); c.stroke(); c.globalAlpha = 1; c.lineWidth = 2;
         [[so.x1, so.y1], [so.x2, so.y2]].forEach(q => { c.beginPath(); c.arc(sx(q[0]), sy(q[1]), 6, 0, 7); c.fill(); c.stroke(); });
+        { const th = wallThumb(so); c.beginPath(); c.rect(th.x - 5, th.y - 5, 10, 10); c.fill(); c.stroke(); }   // НОВОЕ: ручка толщины
       } else if (sel.type === 'opening') {
         const w = walls.find(q => q.id === so.wallId);
         if (w) { const p = FP.openPos(w, so); c.setLineDash([]); c.save(); c.translate(sx(p.sx), sy(p.sy)); c.rotate(Math.atan2(p.uy, p.ux)); const ht = Math.max(w.t * s / 2, 2) + 4; c.strokeRect(-2, -ht, so.width * s + 4, ht * 2); c.restore(); }
@@ -505,6 +507,19 @@
         const h = (so.depth / 2 + .4) * s; c.beginPath(); c.moveTo(0, -so.depth * s / 2); c.lineTo(0, -h); c.stroke(); c.beginPath(); c.arc(0, -h, 6, 0, 7); c.fill(); c.stroke(); c.restore();
       }
       c.setLineDash([]);
+    }
+    // НОВОЕ: инструмент «Стена»: круглые точки на концах всех свободных стен, пунктирные направляющие, точка курсора
+    if (V.tool === 'wall') {
+      c.save(); c.fillStyle = '#fff'; c.strokeStyle = '#1e6fbf'; c.lineWidth = 2;
+      f.walls.forEach(w => [[w.x1, w.y1], [w.x2, w.y2]].forEach(q => { c.beginPath(); c.arc(sx(q[0]), sy(q[1]), 5, 0, 7); c.fill(); c.stroke(); }));
+      if (V.guide) {
+        const g = V.guide; c.lineWidth = 1; c.setLineDash([5, 4]); c.beginPath();
+        if (g.vx) { c.moveTo(sx(g.vx[0]), sy(g.vx[1])); c.lineTo(sx(g.x), sy(g.y)); }   // вертикальная линия от точки к курсору
+        if (g.hy) { c.moveTo(sx(g.hy[0]), sy(g.hy[1])); c.lineTo(sx(g.x), sy(g.y)); }   // горизонтальная
+        c.stroke(); c.setLineDash([]);
+      }
+      if (V.wcur) { c.fillStyle = '#1e6fbf'; c.beginPath(); c.arc(sx(V.wcur.x), sy(V.wcur.y), 4, 0, 7); c.fill(); }
+      c.restore();
     }
     // предпросмотры
     if (tmp && V.tool === 'room') {
@@ -536,10 +551,48 @@
   };
 
   // ---------- мышь ----------
+
+  // НОВОЕ: привязка к «уровню» точек. Возвращает { x, y, guide }: guide = { vx, hy, x, y } для пунктирных линий
+  function alignSnap(mx, my, x, y) {
+    const f = FP.floor(), tol = 8 / V.s, pts = [];
+    f.rooms.forEach(r => FP.rpoly(r).forEach(q => pts.push(q)));
+    f.walls.forEach(w => { pts.push([w.x1, w.y1], [w.x2, w.y2]); });
+    if (tmp && tmp.x0 != null) pts.push([tmp.x0, tmp.y0]);          // начало текущей стены (даёт идеально горизонтальную/вертикальную линию)
+    let bx = null, by = null, dx = tol, dy = tol;
+    pts.forEach(p => {
+      const a = Math.abs(mx - p[0]), b = Math.abs(my - p[1]);
+      if (a < dx) { dx = a; bx = p; }
+      if (b < dy) { dy = b; by = p; }
+    });
+    const rx = bx ? bx[0] : x, ry = by ? by[1] : y;
+    return { x: rx, y: ry, guide: (bx || by) ? { vx: bx, hy: by, x: rx, y: ry } : null };
+  }
+
+  // НОВОЕ: положение квадратика толщины выбранной свободной стены (экранные координаты, на 30% длины, на лицевой грани)
+  function wallThumb(w) {
+    const L = FP.wlen(w) || 1, nx = -(w.y2 - w.y1) / L, ny = (w.x2 - w.x1) / L, h = (w.thickness || FP.floor().thickness) / 2;
+    return { x: sx(w.x1 + (w.x2 - w.x1) * .3 + nx * h), y: sy(w.y1 + (w.y2 - w.y1) * .3 + ny * h), nx, ny };
+  }
+
+  // НОВОЕ: после новой стены пробуем собрать комнату из замкнутого контура; если получилось — спрашиваем имя
+  function autoRoom() {
+    const f = FP.floor();
+    if (!FP.roomsFromWalls(true)) return;                           // контур не замкнут: ничего не меняется; true = нарисованные размеры считаются внутренними
+    tmp = null; V.guide = null;
+    const r = f.rooms[f.rooms.length - 1];
+    FP.select('room', r.id);
+    const nm = prompt('Название комнаты', r.name);
+    if (nm && nm.trim()) { r.name = nm.trim(); FP.changed(); }
+  }
+
   function wallEnd(e) {
     let x = snv(V.mx, e), y = snv(V.my, e);
-    const q = ptSnap(V.mx, V.my); if (q && !e.altKey) { x = q.x; y = q.y; }
+    V.guide = null;
+    const q = ptSnap(V.mx, V.my);
+    if (q && !e.altKey) { x = q.x; y = q.y; }                                              // точка (конец стены / угол) важнее направляющих
+    else if (!e.altKey) { const g = alignSnap(V.mx, V.my, x, y); x = g.x; y = g.y; V.guide = g.guide; }
     if (e.shiftKey && tmp) {
+      V.guide = null;
       const dx = V.mx - tmp.x0, dy = V.my - tmp.y0, L = Math.hypot(dx, dy), a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * Math.PI / 4;
       const Ls = snv(L, e); x = +(tmp.x0 + Math.cos(a) * Ls).toFixed(4); y = +(tmp.y0 + Math.sin(a) * Ls).toFixed(4);
     }
@@ -591,6 +644,7 @@
           if (Math.hypot(q.x - tmp.x0, q.y - tmp.y0) > 0.05) {
             FP.snap(); const nw = { id: FP.uid(), x1: tmp.x0, y1: tmp.y0, x2: q.x, y2: q.y, thickness: f.thickness };
             f.walls.push(nw); tmp = { x0: q.x, y0: q.y, x1: q.x, y1: q.y }; FP.select('wall', nw.id); FP.changed();
+            autoRoom();                                          // НОВОЕ: замкнули контур, значит сразу комната
           }
         }
         V.draw(); return;
@@ -688,6 +742,9 @@
         let nx = snv(x, e), ny = snv(y, e); const q = ptSnap(x, y); if (q && !e.altKey) { nx = q.x; ny = q.y; }
         if (e.shiftKey) { const ox = drag.end === 1 ? o.x2 : o.x1, oy = drag.end === 1 ? o.y2 : o.y1, L = Math.hypot(x - ox, y - oy), a = Math.round(Math.atan2(y - oy, x - ox) / (Math.PI / 4)) * Math.PI / 4; nx = ox + Math.cos(a) * snv(L, e); ny = oy + Math.sin(a) * snv(L, e); }
         if (drag.end === 1) { o.x1 = nx; o.y1 = ny; } else { o.x2 = nx; o.y2 = ny; }
+       } else if (drag.mode === 'wth') {                    // НОВОЕ: толщина = 2 × расстояние курсора до оси стены
+        const L0 = FP.wlen(o) || 1, nx0 = -(o.y2 - o.y1) / L0, ny0 = (o.x2 - o.x1) / L0;
+        o.thickness = Math.max(.03, +(2 * Math.abs((x - o.x1) * nx0 + (y - o.y1) * ny0)).toFixed(2));
       } else if (drag.mode === 'pv') {
         let nx = snv(x, e), ny = snv(y, e); const q = ptSnap(x, y, o); if (q && !e.altKey) { nx = q.x; ny = q.y; }
         if (e.shiftKey) {                                 // НОВОЕ: Shift — выровнять по соседним вершинам (стороны станут горизонтальными/вертикальными)
@@ -712,7 +769,7 @@
       cv.style.cursor = cur;
     }
 
-    if (V.tool === 'wall' && tmp) { const q = wallEnd(e); tmp.x1 = q.x; tmp.y1 = q.y; }
+    if (V.tool === 'wall') { const q = wallEnd(e); V.wcur = q; if (tmp) { tmp.x1 = q.x; tmp.y1 = q.y; } }
     else if (V.tool === 'poly' && tmp && tmp.pts) { const q = polyPt(e); tmp.cur = [q.x, q.y]; }
     else if (V.tool === 'measure' && meas && !meas.done) { meas.b = ptSnap(x, y) || { x: snv(x, e), y: snv(y, e) }; }
     else if (V.tool === 'door' || V.tool === 'window' || V.tool === 'gap') {
